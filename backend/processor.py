@@ -291,15 +291,12 @@ def processar_excel(contents: bytes):
         if not registros:
             continue
 
-        # Adiciona clinica_id a todos os registros de uma vez
+        # Adiciona o clinica_id a cada registro na lista
         for item in registros:
             item["clinica_id"] = clinica_id
 
-        supabase_upsert(
-            tabela,
-            registros,
-            conflict
-        )
+        # Envia a lista completa de registros de uma só vez (bulk upsert)
+        supabase_upsert(tabela, registros, conflict)
 
     return {
         "clinica": clinica,

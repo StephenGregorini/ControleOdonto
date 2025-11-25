@@ -1,8 +1,8 @@
 import os
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from core.processor import processar_excel
+from processor import processar_excel
 
 app = FastAPI(
     title="API de Importação de Clínicas",
@@ -19,6 +19,11 @@ app.add_middleware(
     allow_methods=["*"],  # Permite todos os métodos
     allow_headers=["*"],  # Permite todos os headers
 )
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Redireciona a raiz para a documentação da API."""
+    return RedirectResponse(url="/docs")
 
 @app.get("/status", summary="Verifica o status da API", tags=["Status"])
 async def get_status():

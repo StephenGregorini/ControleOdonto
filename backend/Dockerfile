@@ -8,6 +8,7 @@ WORKDIR /app/backend
 
 # Copia apenas o arquivo de requisitos primeiro para aproveitar o cache do Docker
 # O contexto do build é a raiz do repo, então o caminho é backend/requirements.txt
+# O Railway executa o build da raiz do repo, então o caminho para o arquivo é 'backend/requirements.txt'
 COPY backend/requirements.txt .
 COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r ./backend/requirements.txt
@@ -19,6 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 # Copia todo o código da pasta 'backend' do seu repo para uma pasta 'backend' dentro do container
 COPY backend/ ./backend/
+# Copia o conteúdo da pasta 'backend' do seu repo para uma pasta 'backend' dentro do WORKDIR (/app)
+COPY backend/ ./backend
 
 # Expõe a porta que o uvicorn usará
 EXPOSE 8000

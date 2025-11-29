@@ -9,7 +9,7 @@ import {
 
 import Upload from "./Upload";
 import Historico from "./Historico";
-import Dashboard from "./Dashboard";
+import Dashboard from "./dashboard/Dashboard"; // <<< usa o dashboard novo
 import Login from "./Login";
 import Clinicas from "./Clinicas";
 import Dados from "./Dados";
@@ -27,8 +27,10 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* LOGIN */}
       <Route path="/login" element={<LoginPage />} />
 
+      {/* UPLOAD (padrão) */}
       <Route
         path="/"
         element={
@@ -38,6 +40,7 @@ function AppRoutes() {
         }
       />
 
+      {/* HISTÓRICO */}
       <Route
         path="/historico"
         element={
@@ -47,6 +50,7 @@ function AppRoutes() {
         }
       />
 
+      {/* DASHBOARD NOVO */}
       <Route
         path="/admin/dashboard"
         element={
@@ -56,6 +60,7 @@ function AppRoutes() {
         }
       />
 
+      {/* CLÍNICAS */}
       <Route
         path="/admin/clinicas"
         element={
@@ -65,6 +70,7 @@ function AppRoutes() {
         }
       />
 
+      {/* DADOS / DEBUG */}
       <Route
         path="/admin/dados"
         element={
@@ -74,6 +80,7 @@ function AppRoutes() {
         }
       />
 
+      {/* PERFIL */}
       <Route
         path="/perfil"
         element={
@@ -83,6 +90,7 @@ function AppRoutes() {
         }
       />
 
+      {/* QUALQUER OUTRA ROTA → LOGIN OU UPLOAD */}
       <Route
         path="*"
         element={<Navigate to={user ? "/" : "/login"} replace />}

@@ -1,0 +1,53 @@
+import { useState, useEffect } from "react";
+
+const API_BASE = "http://127.0.0.1:8000";
+
+export function useDashboardData({ clinicaId, janelaMeses, inicio, fim }) {
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function carregar() {
+    try {
+      setLoading(true);
+      setErro(null);
+
+      const params = new URLSearchParams();
+
+      if (inicio && fim) {
+        params.set("inicio", inicio);
+        params.set("fim", fim);
+      } else {
+        params.set("meses", janelaMeses || 12);
+      }
+
+      if (clinicaId && clinicaId !== "todas") {
+        params.set("clinica_id", clinicaId);
+      }
+
+      const url = `${API_BASE}/dashboard?${params.toString()}`;
+      const res = await fetch(url);
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      setDados(await res.json());
+    } catch (e) {
+      console.error("Erro ao carregar dashboard:", e);
+      setErro("Erro ao carregar dados do dashboard.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinicaId, janelaMeses, inicio, fim]);
+
+  return {
+    dados,
+    erro,
+    loading,
+    reload: carregar,
+  };
+}

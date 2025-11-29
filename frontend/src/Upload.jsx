@@ -1,6 +1,4 @@
 import React, { useState, useRef, useMemo } from "react";
-import Layout from "./Layout";
-import Historico from "./Historico";
 
 export default function Upload() {
   const [files, setFiles] = useState([]); // AGORA É UM ARRAY
@@ -87,9 +85,8 @@ export default function Upload() {
   // RENDER
   // -------------------------------
   return (
-    <Layout>
+    <>
       <div className="max-w-5xl mx-auto">
-
         {/* Cabeçalho da página */}
         <div className="mb-10">
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
@@ -97,13 +94,13 @@ export default function Upload() {
           </h1>
 
           <p className="mt-3 text-slate-300 max-w-xl text-sm sm:text-base">
-            Envie um ou vários arquivos para processamento, validação e ingestão automática no MedSimples.
+            Envie um ou vários arquivos para processamento, validação e
+            ingestão automática no MedSimples.
           </p>
         </div>
 
         {/* GRID PRINCIPAL */}
         <div className="grid lg:grid-cols-2 gap-8 items-start">
-
           {/* ESQUERDA – explicações */}
           <div className="space-y-6">
             <div className="rounded-3xl bg-slate-900/70 border border-slate-800 p-6 sm:p-7 backdrop-blur shadow-lg shadow-sky-900/30">
@@ -120,7 +117,9 @@ export default function Upload() {
                     ①
                   </span>
                   <div>
-                    <p className="font-medium text-slate-100">Upload de múltiplos arquivos</p>
+                    <p className="font-medium text-slate-100">
+                      Upload de múltiplos arquivos
+                    </p>
                     <p className="text-slate-400">
                       Agora você pode enviar vários arquivos ao mesmo tempo.
                     </p>
@@ -132,7 +131,9 @@ export default function Upload() {
                     ②
                   </span>
                   <div>
-                    <p className="font-medium text-slate-100">Validação & consistência</p>
+                    <p className="font-medium text-slate-100">
+                      Validação & consistência
+                    </p>
                     <p className="text-slate-400">
                       O backend verifica estrutura e dados de cada arquivo.
                     </p>
@@ -144,7 +145,9 @@ export default function Upload() {
                     ③
                   </span>
                   <div>
-                    <p className="font-medium text-slate-100">Resumo por arquivo</p>
+                    <p className="font-medium text-slate-100">
+                      Resumo por arquivo
+                    </p>
                     <p className="text-slate-400">
                       Cada arquivo retorna um relatório individual.
                     </p>
@@ -157,20 +160,28 @@ export default function Upload() {
             <div className="grid sm:grid-cols-3 gap-3 text-xs sm:text-sm">
               <div className="rounded-2xl bg-slate-900/80 border border-slate-800 px-4 py-3">
                 <p className="text-slate-400">Arquivos selecionados</p>
-                <p className="font-semibold text-sky-300 truncate">{humanFileInfo}</p>
+                <p className="font-semibold text-sky-300 truncate">
+                  {humanFileInfo}
+                </p>
               </div>
 
               <div className="rounded-2xl bg-slate-900/80 border border-slate-800 px-4 py-3">
                 <p className="text-slate-400">Status atual</p>
                 <p className="font-semibold">
-                  {loading ? "Processando..." : results.length > 0 ? "Concluído" : "Aguardando upload"}
+                  {loading
+                    ? "Processando..."
+                    : results.length > 0
+                    ? "Concluído"
+                    : "Aguardando upload"}
                 </p>
               </div>
 
               <div className="rounded-2xl bg-slate-900/80 border border-slate-800 px-4 py-3">
                 <p className="text-slate-400">Próximo passo</p>
                 <p className="font-semibold text-emerald-300">
-                  {results.length > 0 ? "Revisar retorno" : "Selecionar arquivos"}
+                  {results.length > 0
+                    ? "Revisar retorno"
+                    : "Selecionar arquivos"}
                 </p>
               </div>
             </div>
@@ -178,7 +189,6 @@ export default function Upload() {
 
           {/* DIREITA – upload */}
           <div className="space-y-6">
-
             <div className="rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl shadow-sky-900/40 p-6 sm:p-7 backdrop-blur">
               <h2 className="text-base font-semibold text-slate-100 mb-4 flex items-center gap-2">
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300 text-sm">
@@ -236,7 +246,9 @@ export default function Upload() {
                     </p>
                     <p className="text-xs sm:text-sm text-slate-400 mt-1">
                       Aceita múltiplos formatos{" "}
-                      <span className="font-semibold text-sky-300">.xlsx, .csv, .txt…</span>
+                      <span className="font-semibold text-sky-300">
+                        .xlsx, .csv, .txt…
+                      </span>
                     </p>
                   </div>
 
@@ -300,7 +312,9 @@ export default function Upload() {
                       </h3>
                       <span
                         className={`text-[11px] px-2 py-1 rounded-full ${
-                          res.error ? "bg-rose-800/40 text-rose-300" : "bg-slate-800 text-slate-300"
+                          res.error
+                            ? "bg-rose-800/40 text-rose-300"
+                            : "bg-slate-800 text-slate-300"
                         }`}
                       >
                         {res.error ? "Erro" : "OK"}
@@ -320,7 +334,9 @@ export default function Upload() {
 
                     <button
                       onClick={() =>
-                        setShowLogIndex(showLogIndex === index ? null : index)
+                        setShowLogIndex(
+                          showLogIndex === index ? null : index
+                        )
                       }
                       className="text-sky-300 text-xs font-medium hover:underline transition"
                     >
@@ -341,7 +357,6 @@ export default function Upload() {
               </div>
             )}
           </div>
-
         </div>
       </div>
 
@@ -354,6 +369,6 @@ export default function Upload() {
         }
         `}
       </style>
-    </Layout>
+    </>
   );
 }

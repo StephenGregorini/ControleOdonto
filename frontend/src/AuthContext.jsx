@@ -6,11 +6,13 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  // =========================
-  // FUNÇÃO DE LOGIN
-  // =========================
+  const [initializing, setInitializing] = useState(true); // 🔥 novo
+  const [loadingProfile, setLoadingProfile] = useState(false);
+
+  // ============================================
+  // LOGIN
+  // ============================================
   async function signIn(email, senha) {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -19,9 +21,7 @@ export function AuthProvider({ children }) {
 
     if (error) return { error };
 
-    setUser(data.user);
-    await loadProfile(data.user.id);
-
+    // NÃO setar user aqui — deixamos o onAuthStateChange cuidar
     return { error: null };
   }
 
@@ -31,37 +31,34 @@ export function AuthProvider({ children }) {
     setProfile(null);
   }
 
-  // =========================
+  // ============================================
   // CARREGAR PERFIL
-  // =========================
+  // ============================================
   async function loadProfile(userId) {
-    console.log("🔍 Carregando perfil para:", userId);
+    if (!userId) return;
 
-    const { data, error } = await supabase
+    setLoadingProfile(true);
+
+    const { data } = await supabase
       .from("usuarios")
       .select("*")
       .eq("id", userId)
       .maybeSingle();
 
-    console.log("➡️ Perfil:", data, "erro:", error);
-
-    setProfile(data);
+    setProfile(data || null);
+    setLoadingProfile(false);
   }
 
-  // =========================
-  // INICIALIZAR SESSÃO
-  // =========================
+  // ============================================
+  // RESTAURAR SESSÃO AO INICIAR O APP
+  // ============================================
   useEffect(() => {
     let active = true;
 
     async function init() {
-      console.log("🔄 Iniciando sessão...");
-
       const {
         data: { session },
       } = await supabase.auth.getSession();
-
-      console.log("➡️ Sessão restaurada:", session);
 
       if (!active) return;
 
@@ -70,21 +67,20 @@ export function AuthProvider({ children }) {
         await loadProfile(session.user.id);
       }
 
-      setLoading(false);
+      setInitializing(false); // 📌 só agora liberamos o ProtectedRoute
     }
 
     init();
 
+    // LISTENER DE AUTENTICAÇÃO
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("📡 Evento Auth:", event, session);
-
       if (!active) return;
 
       if (session?.user) {
         setUser(session.user);
-        await loadProfile(session.user.id);
+        loadProfile(session.user.id); // sem await
       } else {
         setUser(null);
         setProfile(null);
@@ -97,15 +93,13 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // =========================
-  // RETORNAR AO CONTEXTO
-  // =========================
   return (
     <AuthContext.Provider
       value={{
         user,
         profile,
-        loading,
+        initializing,
+        loadingProfile,
         signIn,
         signOut,
       }}

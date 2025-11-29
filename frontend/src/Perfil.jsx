@@ -1,12 +1,10 @@
 import React from "react";
-import Layout from "./Layout";
 import { useAuth } from "./AuthContext";
 
 export default function Perfil() {
   const { user, profile } = useAuth();
 
   return (
-    <Layout>
       <div className="max-w-4xl mx-auto">
 
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100 mb-10">
@@ -57,6 +55,5 @@ export default function Perfil() {
           </div>
         </div>
       </div>
-    </Layout>
   );
 }

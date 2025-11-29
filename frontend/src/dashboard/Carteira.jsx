@@ -1,8 +1,13 @@
 // /dashboard/Carteira.jsx
 import React from "react";
+import { useDashboard } from "../DashboardContext";
 import { formatCurrency, formatPercent } from "../utils/formatters";
 
-export default function Carteira({ dados, setClinicaId }) {
+export default function Carteira() {
+  const { dados, setClinicaId, setActiveTab } = useDashboard();
+
+  if (!dados) return null;
+  
   const ranking = dados.ranking_clinicas || [];
 
   return (
@@ -32,8 +37,11 @@ export default function Carteira({ dados, setClinicaId }) {
               {ranking.map((row, idx) => (
                 <tr
                   key={row.clinica_id}
-                  className="border-b border-slate-800/40 hover:bg-slate-900/70 cursor-pointer"
-                  onClick={() => setClinicaId(row.clinica_id)}
+                  className="border-b border-slate-800/60 hover:bg-slate-900/70 cursor-pointer"
+                  onClick={() => {
+                    setClinicaId(row.clinica_id);
+                    setActiveTab("decisao");
+                  }}
                 >
                   <td className="py-2 pr-3 text-slate-500">{idx + 1}</td>
                   <td className="py-2 pr-3 text-slate-100">{row.clinica_nome}</td>
@@ -43,13 +51,13 @@ export default function Carteira({ dados, setClinicaId }) {
                     </span>
                   </td>
                   <td className="py-2 pr-3">
-                    <span className="px-2 py-1 rounded-full bg-slate-800 text-emerald-300">
+                    <span className="px-2 py-1 rounded-full bg-slate-800 text-emerald-300 text-xs">
                       {row.categoria_risco}
                     </span>
                   </td>
                   <td className="py-2 pr-3">{formatCurrency(row.limite_aprovado)}</td>
                   <td className="py-2 pr-3">{formatCurrency(row.valor_total_emitido_12m)}</td>
-                  <td className="py-2 pr-3">{formatPercent(row.inadimplencia_media_12m)}</td>
+                  <td className="py-2 pr-3 text-rose-300">{formatPercent(row.inadimplencia_media_12m)}</td>
                 </tr>
               ))}
             </tbody>

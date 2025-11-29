@@ -2,6 +2,18 @@ import { useState, useEffect } from "react";
 
 const API_BASE = "http://127.0.0.1:8000";
 
+async function fetchHistoricoLimites(clinicaId) {
+  if (!clinicaId || clinicaId === "todas") return [];
+  try {
+    const res = await fetch(`${API_BASE}/clinicas/${clinicaId}/limites`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (e) {
+    console.error("Erro ao carregar histórico de limites:", e);
+    return [];
+  }
+}
+
 export function useDashboardData({ clinicaId, janelaMeses, inicio, fim }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
@@ -30,7 +42,10 @@ export function useDashboardData({ clinicaId, janelaMeses, inicio, fim }) {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      setDados(await res.json());
+      const dashboardData = await res.json();
+      const historico = await fetchHistoricoLimites(clinicaId);
+
+      setDados({ ...dashboardData, historico_limite: historico });
     } catch (e) {
       console.error("Erro ao carregar dashboard:", e);
       setErro("Erro ao carregar dados do dashboard.");

@@ -2146,7 +2146,7 @@
         {
           "column_name": "limite_aprovado",
           "data_type": "numeric",
-          "is_nullable": "NO",
+          "is_nullable": "YES",
           "column_default": null,
           "character_maximum_length": null,
           "numeric_precision": null,
@@ -3199,7 +3199,7 @@
       "name": "buckets_analytics",
       "columns": [
         {
-          "column_name": "id",
+          "column_name": "name",
           "data_type": "text",
           "is_nullable": "NO",
           "column_default": null,
@@ -3227,6 +3227,76 @@
           "numeric_precision": null,
           "numeric_scale": null,
           "udt_name": "text"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "timestamptz"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "timestamptz"
+        },
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "uuid"
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "timestamptz"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": []
+    },
+    {
+      "schema": "storage",
+      "name": "buckets_vectors",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "type",
+          "data_type": "USER-DEFINED",
+          "is_nullable": "NO",
+          "column_default": "'VECTOR'::storage.buckettype",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "buckettype"
         },
         {
           "column_name": "created_at",
@@ -3702,6 +3772,106 @@
         },
         {
           "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "timestamptz"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": []
+    },
+    {
+      "schema": "storage",
+      "name": "vector_indexes",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "bucket_id",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "data_type",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "dimension",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": 32,
+          "numeric_scale": 0,
+          "udt_name": "int4"
+        },
+        {
+          "column_name": "distance_metric",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "metadata_configuration",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "jsonb"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "timestamptz"
+        },
+        {
+          "column_name": "updated_at",
           "data_type": "timestamp with time zone",
           "is_nullable": "NO",
           "column_default": "now()",
@@ -5558,6 +5728,11 @@
       "enum_schema": "storage",
       "enum_name": "buckettype",
       "enum_value": "ANALYTICS"
+    },
+    {
+      "enum_schema": "storage",
+      "enum_name": "buckettype",
+      "enum_value": "VECTOR"
     }
   ]
 }

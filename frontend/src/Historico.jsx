@@ -22,7 +22,6 @@ export default function Historico() {
   }, []);
 
   return (
-    <Layout>
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100 mb-10">
           Histórico de <span className="text-sky-400">importações</span>
@@ -90,6 +89,5 @@ export default function Historico() {
           </div>
         )}
       </div>
-    </Layout>
   );
 }

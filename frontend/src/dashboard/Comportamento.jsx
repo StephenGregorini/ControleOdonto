@@ -1,5 +1,6 @@
 // /dashboard/Comportamento.jsx
 import React, { useMemo } from "react";
+import { useDashboard } from "../DashboardContext";
 import { formatCurrency, formatPercent } from "../utils/formatters";
 import {
   ResponsiveContainer,
@@ -18,7 +19,11 @@ const chartColors = {
   parcelas: "#a855f7",
 };
 
-export default function Comportamento({ dados }) {
+export default function Comportamento() {
+  const { dados } = useDashboard();
+
+  if (!dados) return null;
+
   const k = dados.kpis || {};
   const s = dados.series || {};
 
@@ -74,7 +79,7 @@ export default function Comportamento({ dados }) {
 
         <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-4">
           <p className="text-slate-400 text-xs">Ticket médio</p>
-          <h3 className="text-2xl font-semibold text-slate-50">
+          <h3 className="text-2xl font-semibold text-sky-300">
             {formatCurrency(k.ticket_medio_12m)}
           </h3>
           <p className="text-[11px] text-slate-500 mt-1">

@@ -1,17 +1,14 @@
 // src/dashboard/Overview.jsx
 import React from "react";
+import { useDashboard } from "../DashboardContext";
 import Card from "../components/ui/Card";
 import Kpi from "../components/ui/Kpi";
-import { formatCurrency, formatPercent, formatNumber } from "../utils/formatters";
+import { formatCurrency, formatPercent } from "../utils/formatters";
 
-export default function Overview({ dados }) {
-  if (!dados) {
-    return (
-      <div className="text-sm text-slate-400">
-        Nenhum dado disponível para o resumo.
-      </div>
-    );
-  }
+export default function Overview() {
+  const { dados } = useDashboard();
+
+  if (!dados) return null;
 
   const k = dados.kpis || {};
   const contexto = dados.contexto || {};
@@ -37,7 +34,7 @@ export default function Overview({ dados }) {
           label="Score ajustado (0–1)"
           value={k.score_atual != null ? k.score_atual.toFixed(3) : "-"}
           description={`Risco ${k.categoria_risco || "-"}`}
-          color="emerald"
+          color="sky"
         />
 
         <Kpi
@@ -127,21 +124,6 @@ export default function Overview({ dados }) {
           {k.recomendacao_geral ||
             "Nenhuma recomendação disponível para o período selecionado."}
         </p>
-      </Card>
-
-      {/* BLOCO FINAL — CONTEXTO */}
-      <Card>
-        <div className="flex flex-col">
-          <p className="text-xs text-slate-400 mb-1">Contexto do painel</p>
-
-          <p className="text-sm text-slate-100 font-medium">
-            {contexto?.clinica_nome || "—"}
-          </p>
-          <p className="text-[11px] text-slate-500 mt-1">
-            Período disponível:{" "}
-            {periodo.min_mes_ref || "-"} → {periodo.max_mes_ref || "-"}
-          </p>
-        </div>
       </Card>
     </div>
   );

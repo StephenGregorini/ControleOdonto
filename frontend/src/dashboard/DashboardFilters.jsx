@@ -1,42 +1,45 @@
 import React from "react";
+import { useDashboard } from "../DashboardContext";
 import Card from "../components/ui/Card";
 import Select from "../components/ui/Select";
-import { MESES, ANOS } from "../utils/theme";
+import { MESES } from "../utils/theme";
 import { formatMesRef } from "../utils/formatters";
 
-export default function DashboardFilters({
-  clinicas = [],
-  clinicaId,
-  setClinicaId,
+const ANOS = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i));
 
-  janelaMeses,
-  setJanelaMeses,
+export default function DashboardFilters() {
+  const {
+    clinicas,
+    loadingClinicas,
+    clinicaId,
+    setClinicaId,
+    janelaMeses,
+    setJanelaMeses,
+    periodoInicio,
+    setPeriodoInicio,
+    periodoFim,
+    setPeriodoFim,
+    dados,
+  } = useDashboard();
 
-  inicio,
-  fim,
-  setInicio,
-  setFim,
-
-  loadingClinicas,
-  periodoMin,
-  periodoMax,
-}) {
-  // fallback seguro
   const listaClinicas = Array.isArray(clinicas) ? clinicas : [];
 
-  const inicioAno = inicio?.split("-")[0] ?? "";
-  const inicioMes = inicio?.split("-")[1] ?? "";
+  const inicioAno = periodoInicio?.split("-")[0] ?? "";
+  const inicioMes = periodoInicio?.split("-")[1] ?? "";
 
-  const fimAno = fim?.split("-")[0] ?? "";
-  const fimMes = fim?.split("-")[1] ?? "";
+  const fimAno = periodoFim?.split("-")[0] ?? "";
+  const fimMes = periodoFim?.split("-")[1] ?? "";
 
-  const periodoCustom = !!(inicio && fim);
+  const periodoCustom = !!(periodoInicio && periodoFim);
+
+  const periodoMin = dados?.filtros?.periodo?.min_mes_ref;
+  const periodoMax = dados?.filtros?.periodo?.max_mes_ref;
 
   return (
     <Card className="p-6 mb-6">
       {/* Título */}
       <div className="flex items-center justify-between mb-4">
-        <h2 classname="text-sm font-semibold text-slate-200">
+        <h2 className="text-sm font-semibold text-slate-200">
           Filtros do Painel
         </h2>
 
@@ -115,13 +118,25 @@ export default function DashboardFilters({
           <div className="flex items-center gap-3">
             <Select
               value={inicioMes}
-              onChange={(mes) => mes && setInicio(`${inicioAno || ANOS[0]}-${mes}`)}
-              options={[{ label: "Mês", value: "" }, ...MESES]}
+              onChange={(mes) => {
+                if (!mes) {
+                  setPeriodoInicio("");
+                  return;
+                }
+                setPeriodoInicio(`${inicioAno || ANOS[0]}-${mes}`);
+              }}
+              options={[{ label: "Mês", value: "" }, ...MESES.map(m => ({ label: m.label, value: m.value }))]}
             />
 
             <Select
               value={inicioAno}
-              onChange={(ano) => ano && setInicio(`${ano}-${inicioMes || "01"}`)}
+              onChange={(ano) => {
+                if (!ano) {
+                  setPeriodoInicio("");
+                  return;
+                }
+                setPeriodoInicio(`${ano}-${inicioMes || "01"}`);
+              }}
               options={[{ label: "Ano", value: "" }, ...ANOS.map((a) => ({ label: a, value: a }))]}
             />
           </div>
@@ -130,13 +145,25 @@ export default function DashboardFilters({
           <div className="flex items-center gap-3 mt-2">
             <Select
               value={fimMes}
-              onChange={(mes) => mes && setFim(`${fimAno || ANOS.at(-1)}-${mes}`)}
-              options={[{ label: "Mês", value: "" }, ...MESES]}
+              onChange={(mes) => {
+                if (!mes) {
+                  setPeriodoFim("");
+                  return;
+                }
+                setPeriodoFim(`${fimAno || ANOS[ANOS.length - 1]}-${mes}`);
+              }}
+              options={[{ label: "Mês", value: "" }, ...MESES.map(m => ({ label: m.label, value: m.value }))]}
             />
 
             <Select
               value={fimAno}
-              onChange={(ano) => ano && setFim(`${ano}-${fimMes || "12"}`)}
+              onChange={(ano) => {
+                if (!ano) {
+                  setPeriodoFim("");
+                  return;
+                }
+                setPeriodoFim(`${ano}-${fimMes || "12"}`);
+              }}
               options={[{ label: "Ano", value: "" }, ...ANOS.map((a) => ({ label: a, value: a }))]}
             />
           </div>

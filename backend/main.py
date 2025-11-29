@@ -10,6 +10,7 @@ from typing import Optional
 from processor import processar_excel
 
 
+
 # ==========================
 # CONFIG SUPABASE
 # ==========================
@@ -34,10 +35,9 @@ HEADERS = {
 }
 
 class LimiteAprovadoPayload(BaseModel):
-    limite_aprovado: float
+    limite_aprovado: float | None = None
     observacao: str | None = None
     aprovado_por: str | None = None
-
 
 
 # ==========================
@@ -121,40 +121,32 @@ def ping():
 
 @app.post("/clinicas/{clinica_id}/limite_aprovado")
 async def definir_limite_aprovado(clinica_id: str, payload: LimiteAprovadoPayload):
-    """
-    Registra um novo limite aprovado para a clínica.
 
-    A tabela `clinica_limite` guarda o histórico; a view `vw_dashboard_final`
-    pega o registro mais recente e expõe como `limite_aprovado`.
-    """
-    if payload.limite_aprovado is None or payload.limite_aprovado <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Informe um valor de limite aprovado maior que zero.",
-        )
+    if payload.limite_aprovado is None:
+        # Registro de revogação
+        row = {
+            "clinica_id": clinica_id,
+            "limite_aprovado": None,
+            "observacao": "Limite revogado",
+            "aprovado_por": payload.aprovado_por,
+        }
+    else:
+        # Registro de aprovação normal
+        row = {
+            "clinica_id": clinica_id,
+            "limite_aprovado": float(payload.limite_aprovado),
+            "observacao": payload.observacao or None,
+            "aprovado_por": payload.aprovado_por,
+        }
 
-    row = {
-        "clinica_id": clinica_id,  # uuid em texto
-        "limite_aprovado": float(payload.limite_aprovado),
-        "observacao": payload.observacao,
-        "aprovado_por": payload.aprovado_por,
-    }
 
     try:
         inserido = supabase_post("clinica_limite", row)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    if not inserido:
-        raise HTTPException(
-            status_code=500,
-            detail="Falha ao registrar o limite aprovado.",
-        )
+    return {"ok": True, "registro": inserido}
 
-    return {
-        "ok": True,
-        "registro": inserido,
-    }
 
 @app.get("/clinicas/{clinica_id}/limites")
 async def listar_limites_clinica(clinica_id: str):

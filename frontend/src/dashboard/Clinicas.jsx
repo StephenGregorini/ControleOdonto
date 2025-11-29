@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "../apiConfig";
 
 export default function Clinicas() {
   const [clinicas, setClinicas] = useState([]);
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
-  const API_BASE = "http://127.0.0.1:8000";
 
   // ===========================
   // 1) Carregar lista de clínicas
@@ -17,14 +16,14 @@ export default function Clinicas() {
     try {
       setLoading(true);
 
-      const r = await fetch(`${API_BASE}/dashboard/clinicas`);
+      const r = await fetch(`${API_BASE_URL}/dashboard/clinicas`);
       const lista = await r.json();
 
       // 2) Para cada clínica, buscar KPIs do dashboard
       const enriched = await Promise.all(
         lista.map(async (c) => {
           try {
-            const r2 = await fetch(`${API_BASE}/dashboard?clinica_id=${c.id}`);
+            const r2 = await fetch(`${API_BASE_URL}/dashboard?clinica_id=${c.id}`);
             const dash = await r2.json();
 
             return {

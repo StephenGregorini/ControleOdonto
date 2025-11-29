@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Modal from "./components/ui/Modal";
 import { formatPercent } from "./utils/formatters";
+import { API_BASE_URL } from "./apiConfig";
 
 function HistoricoContent() {
   const [historico, setHistorico] = useState([]);
@@ -8,7 +9,7 @@ function HistoricoContent() {
 
   async function carregarHistorico() {
     try {
-      const res = await fetch("http://127.0.0.1:8000/historico");
+      const res = await fetch(`${API_BASE_URL}/historico`);
       const json = await res.json();
       setHistorico(json);
     } catch (err)      {

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useDashboard } from "../DashboardContext";
 import { formatCurrency } from "../utils/formatters";
 import Modal from "../components/ui/Modal";
+import { API_BASE_URL } from "../apiConfig";
 
 function parseBrazilianCurrency(value) {
   if (!value) return 0;
@@ -58,8 +59,8 @@ export default function SidebarLimite({ open, onClose }) {
         score_base: k.score_atual || null,
       };
 
-      const API_BASE = "http://127.0.0.1:8000";
-      const r = await fetch(`${API_BASE}/clinicas/${clinicaId}/limite_aprovado`, {
+
+      const r = await fetch(`${API_BASE_URL}/clinicas/${clinicaId}/limite_aprovado`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

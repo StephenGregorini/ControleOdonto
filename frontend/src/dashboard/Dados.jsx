@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { format } from "date-fns";
+import React, { useState, useEffect } from "react";
+import { API_BASE_URL } from "../apiConfig";
 
 export default function Dados() {
   const [hist, setHist] = useState([]);

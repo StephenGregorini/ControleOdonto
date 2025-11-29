@@ -1,5 +1,7 @@
 import React, { useState, useRef, useMemo } from "react";
 import HistoricoModal from "./HistoricoModal";
+import { API_BASE_URL } from "./apiConfig";
+import { API_BASE_URL } from "./apiConfig";
 
 export default function Upload() {
   const [files, setFiles] = useState([]); // AGORA É UM ARRAY
@@ -39,14 +41,16 @@ export default function Upload() {
     const newResults = [];
 
     for (const file of files) {
+
       const formData = new FormData();
       formData.append("file", file);
 
       try {
-        const res = await fetch("http://127.0.0.1:8000/upload", {
+        const res = await fetch(`${API_BASE_URL}/upload`, {
           method: "POST",
           body: formData,
         });
+//...
 
         const json = await res.json();
         newResults.push({ file: file.name, data: json, error: !res.ok });

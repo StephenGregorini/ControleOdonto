@@ -6,7 +6,7 @@ export default function Modal({ open, onClose, children }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg p-6 max-w-sm w-full">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg p-6 max-w-4xl w-full">
         {children}
       </div>
     </div>

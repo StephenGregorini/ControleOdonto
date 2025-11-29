@@ -14,7 +14,6 @@ export default function Layout({ children }) {
 
 const menu = [
   { label: "Upload", to: "/" },
-  { label: "Histórico", to: "/historico" },
   { label: "Dashboard", to: "/admin/dashboard", admin: true },
   { label: "Clínicas", to: "/admin/clinicas", admin: true },
   { label: "Dados", to: "/admin/dados", admin: true },

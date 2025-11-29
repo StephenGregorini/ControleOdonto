@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo } from "react";
+import HistoricoModal from "./HistoricoModal";
 
 export default function Upload() {
   const [files, setFiles] = useState([]); // AGORA É UM ARRAY
@@ -6,6 +7,7 @@ export default function Upload() {
   const [results, setResults] = useState([]); // RESULTADO DE MULTIPLOS UPLOADS
   const [loading, setLoading] = useState(false);
   const [showLogIndex, setShowLogIndex] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -89,9 +91,17 @@ export default function Upload() {
       <div className="max-w-5xl mx-auto">
         {/* Cabeçalho da página */}
         <div className="mb-10">
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
-            Upload inteligente de <span className="text-sky-400">produção</span>
-          </h1>
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
+              Upload inteligente de <span className="text-sky-400">produção</span>
+            </h1>
+            <button
+              onClick={() => setShowHistory(true)}
+              className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition"
+            >
+              Ver Histórico
+            </button>
+          </div>
 
           <p className="mt-3 text-slate-300 max-w-xl text-sm sm:text-base">
             Envie um ou vários arquivos para processamento, validação e
@@ -100,9 +110,9 @@ export default function Upload() {
         </div>
 
         {/* GRID PRINCIPAL */}
-        <div className="grid lg:grid-cols-2 gap-8 items-start">
+        <div className="grid lg:grid-cols-2 gap-8 items-stretch">
           {/* ESQUERDA – explicações */}
-          <div className="space-y-6">
+          <div className="flex flex-col justify-between">
             <div className="rounded-3xl bg-slate-900/70 border border-slate-800 p-6 sm:p-7 backdrop-blur shadow-lg shadow-sky-900/30">
               <h2 className="text-base font-semibold text-slate-100 mb-4 flex items-center gap-2">
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-500/20 text-sky-300 text-sm">
@@ -369,6 +379,11 @@ export default function Upload() {
         }
         `}
       </style>
+
+      <HistoricoModal
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
+      />
     </>
   );
 }

@@ -3,37 +3,28 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
 export default function ProtectedRoute({ children, requireAdmin = false }) {
-  const { user, profile, initializing, loadingProfile } = useAuth();
+  const { user, profile, initializing } = useAuth();
 
-  // 1) Enquanto o Supabase ainda está restaurando sessão...
-  if (initializing || loadingProfile) {
+  // 1. Aguarda inicialização
+  if (initializing) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-950">
-        <p className="text-slate-400">Carregando sessão...</p>
+      <div className="flex items-center justify-center h-screen bg-slate-950 text-white">
+        <p>Carregando...</p>
       </div>
     );
   }
 
-  // 2) Se ainda não existe usuário após carregar -> rota protegida
+  // 2. Se não tem usuário, vai para o login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // 3) Rota que exige admin
-  if (requireAdmin) {
-    if (!profile) {
-      return (
-        <div className="flex h-screen w-full items-center justify-center bg-slate-950">
-          <p className="text-slate-400">Carregando permissões...</p>
-        </div>
-      );
-    }
-
-    if (profile.role !== "admin") {
-      return <Navigate to="/" replace />;
-    }
+  // 3. Se exige admin e o perfil não é de admin, nega acesso (ou redireciona)
+  if (requireAdmin && profile?.role !== "admin") {
+    // Pode ser uma página de "Acesso Negado" ou redirecionar para a home
+    return <Navigate to="/" replace />;
   }
 
-  // 4) Liberado
+  // 4. Se passou por tudo, renderiza o conteúdo protegido
   return children;
 }

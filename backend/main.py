@@ -231,16 +231,6 @@ async def listar_historico():
         except Exception:
             boletos_rows = []
 
-        # 2.2 Inadimplência
-        try:
-            inad_rows = supabase_get(
-                "inadimplencia",
-                select="clinica_id,taxa",
-                extra_params={"clinica_id": f"in.({ids_in})"},
-            )
-        except Exception:
-            inad_rows = []
-
         # Agregar boletos (soma)
         for row in boletos_rows or []:
             cid = row.get("clinica_id")
@@ -255,23 +245,73 @@ async def listar_historico():
                 totais_boletos_por_clinica.get(cid, 0) + qtde
             )
 
-        # Agregar inadimplência (média)
-        inad_acum: dict[str, list[float]] = {}
-        for row in inad_rows or []:
-            cid = row.get("clinica_id")
-            if not cid:
-                continue
-            taxa = row.get("taxa")
-            if taxa is None:
-                continue
-            try:
-                taxa = float(taxa)
-            except Exception:
-                continue
-            inad_acum.setdefault(cid, []).append(taxa)
+        # 2.2 Inadimplência REAL
+        try:
+            dash_rows = supabase_get(
+                "vw_dashboard_final",
+                select="clinica_id,mes_ref_date,valor_total_emitido,taxa_pago_no_vencimento,taxa_inadimplencia",
+                extra_params={"clinica_id": f"in.({ids_in})"},
+            )
+        except Exception:
+            dash_rows = []
 
-        for cid, taxas in inad_acum.items():
-            media_inadimplencia_por_clinica[cid] = sum(taxas) / len(taxas)
+        df_dash = to_df(dash_rows)
+
+        if not df_dash.empty:
+            # Ignorar mês atual
+            hoje_utc = datetime.utcnow()
+            primeiro_dia_mes_atual = hoje_utc.replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            ).date()
+            if "mes_ref_date" in df_dash.columns:
+                df_dash["mes_ref_date"] = pd.to_datetime(
+                    df_dash["mes_ref_date"], errors="coerce"
+                )
+                df_dash = df_dash[
+                    df_dash["mes_ref_date"].dt.date < primeiro_dia_mes_atual
+                ]
+
+            # Tipos numéricos e preenchimento de nulos
+            for col in [
+                "valor_total_emitido",
+                "taxa_pago_no_vencimento",
+                "taxa_inadimplencia",
+            ]:
+                if col in df_dash.columns:
+                    df_dash[col] = pd.to_numeric(df_dash[col], errors="coerce")
+
+            df_dash = df_dash.fillna(
+                {
+                    "valor_total_emitido": 0,
+                    "taxa_pago_no_vencimento": 0,
+                    "taxa_inadimplencia": 0,
+                }
+            )
+
+            # Cálculo da inadimplência real
+            df_dash["taxa_pago_no_vencimento"] = df_dash[
+                "taxa_pago_no_vencimento"
+            ].clip(0, 1)
+            df_dash["taxa_inad_dos_atrasados"] = df_dash["taxa_inadimplencia"].clip(0, 1)
+            df_dash["valor_nao_pago_no_venc"] = df_dash["valor_total_emitido"] * (
+                1 - df_dash["taxa_pago_no_vencimento"]
+            )
+            df_dash["valor_inad_real"] = (
+                df_dash["valor_nao_pago_no_venc"]
+                * df_dash["taxa_inad_dos_atrasados"]
+            )
+
+            # Agregar por clínica (média ponderada)
+            agg_df = df_dash.groupby("clinica_id").agg(
+                valor_inad_real_total=("valor_inad_real", "sum"),
+                valor_total_emitido_total=("valor_total_emitido", "sum"),
+            )
+
+            for cid, row in agg_df.iterrows():
+                emitido = row["valor_total_emitido_total"]
+                inad = row["valor_inad_real_total"]
+                if emitido > 0:
+                    media_inadimplencia_por_clinica[str(cid)] = inad / emitido
 
     # 3) Enriquecer cada registro do histórico com os totais reais
     historico_enriquecido = []

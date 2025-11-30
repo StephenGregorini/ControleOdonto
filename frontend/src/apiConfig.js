@@ -1,1 +1,2 @@
-export const API_BASE_URL = "https://controleodonto.up.railway.app"; // ou o host que o Railway der
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+

@@ -28,13 +28,6 @@ export function DashboardProvider({ children }) {
 
   const [panelLimiteAberto, setPanelLimiteAberto] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
-  const [initialLoading, setInitialLoading] = useState(true);
-
-  useEffect(() => {
-    if (!loadingDashboard) {
-      setInitialLoading(false);
-    }
-  }, [loadingDashboard]);
 
   const value = {
     profile,
@@ -62,14 +55,6 @@ export function DashboardProvider({ children }) {
     activeTab,
     setActiveTab,
   };
-
-  if (initialLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-950 text-white">
-        <p>Carregando dashboard...</p>
-      </div>
-    );
-  }
 
   return (
     <DashboardContext.Provider value={value}>

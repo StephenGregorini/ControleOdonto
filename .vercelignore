@@ -1,0 +1,6 @@
+frontend/
+Clinicas/
+__pycache__/
+*.pyc
+.DS_Store
+node_modules/

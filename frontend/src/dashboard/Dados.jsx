@@ -5,7 +5,7 @@ export default function Dados() {
   const [hist, setHist] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const API_BASE = "http://127.0.0.1:8080";
+  const API_BASE = "http://127.0.0.1:8000";
 
   async function carregarHistorico() {
     try {

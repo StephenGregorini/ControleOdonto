@@ -7,7 +7,7 @@ export default function Historico() {
 
   async function carregarHistorico() {
     try {
-      const res = await fetch("http://127.0.0.1:8080/historico");
+      const res = await fetch("http://127.0.0.1:8000/historico");
       const json = await res.json();
       setHistorico(json);
     } catch (err) {

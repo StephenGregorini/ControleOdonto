@@ -96,7 +96,7 @@ export default function Upload() {
         <div className="mb-10">
           <div className="flex justify-between items-center">
             <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
-              Upload inteligente de <span className="text-sky-400">produção</span>
+              Central de Upload para <span className="text-sky-400">Score de Crédito</span>
             </h1>
             <button
               onClick={() => setShowHistory(true)}
@@ -108,7 +108,7 @@ export default function Upload() {
 
           <p className="mt-3 text-slate-300 max-w-xl text-sm sm:text-base">
             Envie um ou vários arquivos para processamento, validação e
-            ingestão automática no MedSimples.
+            ingestão automática na MedSimples.
           </p>
         </div>
 

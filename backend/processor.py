@@ -259,7 +259,16 @@ def parse_excel_from_bytes(contents: bytes):
             if isinstance(titulo, str) and titulo.strip() not in ("", "CNPJ"):
                 header = df.iloc[i + 1]
 
-                if any(isinstance(c, str) and "MesRef" in c for c in header):
+                is_header_ok = any(isinstance(c, str) and "MesRef" in c for c in header)
+
+                # Detecta caso especial: bloco sem header mas com datas logo abaixo
+                is_header_missing_but_valid = (
+                    not is_header_ok
+                    and isinstance(df.iloc[i+2, 0], datetime)
+                )
+
+                if is_header_ok or is_header_missing_but_valid:
+
                     rows = []
                     j = i + 2
 

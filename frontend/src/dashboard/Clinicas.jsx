@@ -148,7 +148,6 @@ export default function Clinicas() {
   const [filtroNome, setFiltroNome] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [scoreMin, setScoreMin] = useState(0);
-  const [showFilters, setShowFilters] = useState(false);
   const [showConfirmRevoke, setShowConfirmRevoke] = useState(false);
 
   const navigate = useNavigate();
@@ -395,13 +394,6 @@ export default function Clinicas() {
             </p>
           </div>
 
-          <button
-            onClick={() => setShowFilters((prev) => !prev)}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-700 text-xs text-slate-300 bg-slate-900/80 hover:border-sky-500/60 hover:text-sky-200 transition"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-            Filtros avançados
-          </button>
         </div>
 
         {/* Resumo do portfólio */}
@@ -493,22 +485,6 @@ export default function Clinicas() {
               );
             })}
           </div>
-
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div
-                className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 text-xs space-y-3"
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-              >
-                <p className="text-slate-400">
-                  Aqui podemos adicionar futuramente filtros por faixa de
-                  limite, inadimplência, volume, etc. (estrutura já pronta).
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         {/* Lista de Clínicas */}

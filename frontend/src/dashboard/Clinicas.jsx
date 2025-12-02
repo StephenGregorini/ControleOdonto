@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { useDashboard } from "../DashboardContext";
 import { motion, AnimatePresence } from "framer-motion";
 import Modal from "../components/ui/Modal";
+import PageLayout from "../components/ui/PageLayout";
 
 // ===========================
 // Painel Lateral (memoizado)
@@ -381,19 +382,16 @@ export default function Clinicas() {
   // ===========================
   return (
     <>
-      <section className="space-y-6">
+      <PageLayout> {/* O PageLayout já define o container principal */}
         {/* Título + Ação */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h2 className="text-slate-200 text-lg font-semibold tracking-tight">
-              Portfólio de Clínicas
-            </h2>
-            <p className="text-slate-500 text-xs mt-1">
-              Visão consolidada de risco, limite e histórico financeiro das
-              clínicas.
-            </p>
-          </div>
-
+        <div className="mb-10">
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
+            Portfólio de <span className="text-sky-400">Clínicas</span>
+          </h1>
+          <p className="mt-2 text-slate-400 text-sm sm:text-base max-w-3xl">
+            Visão consolidada de risco, limite e histórico financeiro das
+            clínicas.
+          </p>
         </div>
 
         {/* Resumo do portfólio */}
@@ -434,7 +432,7 @@ export default function Clinicas() {
         </div>
 
         {/* Filtros */}
-        <div className="space-y-3">
+        <div className="space-y-3 mt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="relative md:col-span-2">
               <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -488,7 +486,7 @@ export default function Clinicas() {
         </div>
 
         {/* Lista de Clínicas */}
-        {loadingDashboard ? (
+        <div className="mt-6"> {loadingDashboard ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <SkeletonCard key={i} />
@@ -607,8 +605,8 @@ export default function Clinicas() {
               );
             })}
           </div>
-        )}
-      </section>
+        )} </div>
+      </PageLayout>
 
       {/* Painel lateral */}
       {clinicaSelecionada && (

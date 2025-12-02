@@ -8,28 +8,30 @@ export default function DashboardHeader({ onExport }) {
   const contexto = dados?.contexto;
 
   return (
-    <header className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+    <header className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
       
       {/* Título */}
       <div>
-        <div className="inline-flex items-center gap-2 rounded-full bg-slate-900/90 border border-sky-500/40 px-3 py-1 mb-3">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-[11px] tracking-wide text-sky-200 uppercase">
-            Motor de crédito · MedSimples
-          </span>
+        <div className="flex items-center gap-4 mb-2">
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
+            Painel de <span className="text-sky-400">Crédito e Risco</span>
+          </h1>
+          <div className="hidden sm:flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300 mt-1">
+            <div className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </div>
+            <span>Motor de Crédito MedSimples</span>
+          </div>
         </div>
 
-        <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
-          Painel de <span className="text-sky-400">crédito e risco</span>
-        </h1>
-
-        <p className="text-slate-300 max-w-2xl text-sm sm:text-base mt-2">
+        <p className="text-slate-400 max-w-3xl text-sm sm:text-base mt-2">
           Visão de risco, inadimplência, comportamento e limites recomendados para cada clínica.
         </p>
       </div>
 
       {/* Infos do canto direito */}
-      <div className="text-right text-xs text-slate-400 space-y-0.5">
+      <div className="text-left lg:text-right text-xs text-slate-400 space-y-0.5 flex-shrink-0">
         <div>
           Período disponível:{" "}
           <span className="font-semibold text-sky-300">

@@ -21,10 +21,7 @@ export function AuthProvider({ children }) {
 
     if (error) return { error };
 
-    // Aqui GARANTE que o usuário existe imediatamente.
     setUser(data.user);
-
-    // Carrega perfil diretamente (instant login)
     await loadProfile(data.user.id);
 
     return { error: null };
@@ -46,14 +43,35 @@ export function AuthProvider({ children }) {
     if (!userId) return;
 
     setLoadingProfile(true);
-    const { data } = await supabase
+
+    const { data, error } = await supabase
       .from("usuarios")
       .select("*")
       .eq("id", userId)
       .maybeSingle();
 
-    setProfile(data || null);
+    if (!error) setProfile(data);
     setLoadingProfile(false);
+    return data;
+  }
+
+  // =============================
+  // REFRESH PROFILE (IMEDIATO)
+  // =============================
+  async function refreshProfile() {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    if (!error) {
+      setProfile(data);
+    }
+
+    return data;
   }
 
   // =============================
@@ -77,7 +95,6 @@ export function AuthProvider({ children }) {
 
     init();
 
-    // Listen auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!active) return;
@@ -107,6 +124,7 @@ export function AuthProvider({ children }) {
         profile,
         signIn,
         signOut,
+        refreshProfile, // ADICIONADO AQUI
       }}
     >
       {children}

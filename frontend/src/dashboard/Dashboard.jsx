@@ -11,6 +11,7 @@ import Limites from "./Limites";
 import Tabs from "../components/ui/Tabs";
 import { API_BASE_URL } from "../apiConfig";
 import { useEffect } from "react";
+import PageLayout from "../components/ui/PageLayout";
 
 
 const TABS = [
@@ -69,43 +70,45 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="w-full space-y-8">
+    <PageLayout>
+      <div className="w-full space-y-8">
 
-      <DashboardHeader onExport={handleExport} />
+        <DashboardHeader onExport={handleExport} />
 
-      <DashboardFilters />
+        <DashboardFilters />
 
-      <Tabs tabs={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Tabs tabs={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {loadingDashboard && <p>Carregando...</p>}
-      {erro && <p className="text-rose-400">{erro}</p>}
+        {loadingDashboard && <p>Carregando...</p>}
+        {erro && <p className="text-rose-400">{erro}</p>}
 
-      {dados && !loadingDashboard && !erro && (
-        <>
-          {/* OVERVIEW */}
-          {activeTab === "overview" && <Overview />}
+        {dados && !loadingDashboard && !erro && (
+          <>
+            {/* OVERVIEW */}
+            {activeTab === "overview" && <Overview />}
 
-          {/* LIMITES */}
-          {activeTab === "limites" && <Limites />}
+            {/* LIMITES */}
+            {activeTab === "limites" && <Limites />}
 
-          {/* DECISÃO DE CRÉDITO */}
-          {activeTab === "decisao" && clinicaId && clinicaId !== "todas" && (
-            <DecisaoCredito />
-          )}
+            {/* DECISÃO DE CRÉDITO */}
+            {activeTab === "decisao" && clinicaId && clinicaId !== "todas" && (
+              <DecisaoCredito />
+            )}
 
-          {activeTab === "decisao" && (!clinicaId || clinicaId === "todas") && (
-            <p className="text-slate-400 text-sm">
-              Selecione uma clínica específica para visualizar a decisão de crédito.
-            </p>
-          )}
+            {activeTab === "decisao" && (!clinicaId || clinicaId === "todas") && (
+              <p className="text-slate-400 text-sm">
+                Selecione uma clínica específica para visualizar a decisão de crédito.
+              </p>
+            )}
 
-          {/* COMPORTAMENTO */}
-          {activeTab === "comportamento" && <Comportamento />}
+            {/* COMPORTAMENTO */}
+            {activeTab === "comportamento" && <Comportamento />}
 
-          {/* CARTEIRA */}
-          {activeTab === "carteira" && <Carteira />}
-        </>
-      )}
-    </div>
+            {/* CARTEIRA */}
+            {activeTab === "carteira" && <Carteira />}
+          </>
+        )}
+      </div>
+    </PageLayout>
   );
 }

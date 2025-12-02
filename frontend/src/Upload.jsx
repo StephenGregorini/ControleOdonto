@@ -1,35 +1,26 @@
 import React, { useState, useRef, useMemo } from "react";
 import HistoricoModal from "./HistoricoModal";
+import PageLayout from "./components/ui/PageLayout";
 import { API_BASE_URL } from "./apiConfig";
 
 export default function Upload() {
-  const [files, setFiles] = useState([]); // AGORA É UM ARRAY
+  const [files, setFiles] = useState([]);
   const [dragging, setDragging] = useState(false);
-  const [results, setResults] = useState([]); // RESULTADO DE MULTIPLOS UPLOADS
+  const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showLogIndex, setShowLogIndex] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
 
   const fileInputRef = useRef(null);
 
-  // -------------------------------
-  // MULTI-UPLOAD
-  // -------------------------------
-  const handleFiles = (event) => {
-    const selected = Array.from(event.target.files);
-    setFiles(selected);
-  };
-
+  const handleFiles = (e) => setFiles(Array.from(e.target.files));
   const handleDrop = (e) => {
     e.preventDefault();
     setDragging(false);
     const dropped = Array.from(e.dataTransfer.files);
-    if (dropped.length > 0) {
-      setFiles(dropped);
-    }
+    if (dropped.length > 0) setFiles(dropped);
   };
 
-  // Upload múltiplo
   const upload = async () => {
     if (files.length === 0 || loading) return;
 
@@ -40,7 +31,6 @@ export default function Upload() {
     const newResults = [];
 
     for (const file of files) {
-
       const formData = new FormData();
       formData.append("file", file);
 
@@ -49,10 +39,10 @@ export default function Upload() {
           method: "POST",
           body: formData,
         });
-//...
 
         const json = await res.json();
         newResults.push({ file: file.name, data: json, error: !res.ok });
+
       } catch (err) {
         newResults.push({
           file: file.name,
@@ -69,9 +59,6 @@ export default function Upload() {
     setLoading(false);
   };
 
-  // -------------------------------
-  // Info para o card
-  // -------------------------------
   const humanFileInfo = useMemo(() => {
     if (!files.length) return "Nenhum selecionado";
 
@@ -86,144 +73,141 @@ export default function Upload() {
     return `${files.length} arquivos selecionados`;
   }, [files]);
 
-  // -------------------------------
-  // RENDER
-  // -------------------------------
   return (
     <>
-      <div className="max-w-5xl mx-auto">
-        {/* Cabeçalho da página */}
-        <div className="mb-10">
-          <div className="flex justify-between items-center">
+      <PageLayout>
+
+        {/* HEADER */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-10">
+          <div>
             <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
-              Central de Upload para <span className="text-sky-400">Score de Crédito</span>
+              Central de <span className="text-sky-400">Upload</span>
             </h1>
-            <button
-              onClick={() => setShowHistory(true)}
-              className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition"
-            >
-              Ver Histórico
-            </button>
+            <p className="mt-2 text-slate-400 text-sm sm:text-base max-w-2xl">
+              Envie um ou vários arquivos para processamento, validação e ingestão automática.
+            </p>
           </div>
 
-          <p className="mt-3 text-slate-300 max-w-xl text-sm sm:text-base">
-            Envie um ou vários arquivos para processamento, validação e
-            ingestão automática na MedSimples.
-          </p>
+          <button
+            onClick={() => setShowHistory(true)}
+            className="px-4 py-2 rounded-xl bg-slate-800/80 border border-slate-700 hover:border-sky-500/50 hover:text-sky-200 text-slate-300 text-sm transition"
+          >
+            Ver Histórico
+          </button>
         </div>
 
-        {/* GRID PRINCIPAL */}
-        <div className="grid lg:grid-cols-2 gap-8 items-stretch">
-          {/* ESQUERDA – explicações */}
-          <div className="flex flex-col justify-between">
-            <div className="rounded-3xl bg-slate-900/70 border border-slate-800 p-6 sm:p-7 backdrop-blur shadow-lg shadow-sky-900/30">
-              <h2 className="text-base font-semibold text-slate-100 mb-4 flex items-center gap-2">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-500/20 text-sky-300 text-sm">
-                  1
-                </span>
+        {/* GRID */}
+        <div className="grid lg:grid-cols-2 gap-8 items-start">
+
+          {/* =============== COLUNA ESQUERDA (ALINHAMENTO FIXO) =============== */}
+          <div className="flex flex-col h-full">
+
+            {/* CARD SUPERIOR */}
+            <div className="
+              rounded-3xl bg-slate-900/70 border border-slate-800 p-7 
+              backdrop-blur shadow-lg shadow-sky-900/30 
+              flex flex-col flex-grow
+            ">
+              <h2 className="text-lg font-semibold text-slate-100 mb-8 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-sky-400" />
                 Como funciona o processamento
               </h2>
 
-              <ol className="space-y-3 text-sm text-slate-300">
-                <li className="flex gap-3">
-                  <span className="mt-0.5 h-5 w-5 rounded-full bg-sky-500/15 border border-sky-500/60 flex items-center justify-center text-[10px]">
-                    ①
-                  </span>
+              <div className="space-y-7">
+
+                <div className="flex gap-4">
+                  <div className="h-9 w-9 rounded-full bg-sky-500/15 border border-sky-500/40 text-sky-300 flex items-center justify-center font-semibold text-sm">
+                    1
+                  </div>
                   <div>
                     <p className="font-medium text-slate-100">
                       Upload de múltiplos arquivos
                     </p>
-                    <p className="text-slate-400">
+                    <p className="text-slate-400 text-sm">
                       Agora você pode enviar vários arquivos ao mesmo tempo.
                     </p>
                   </div>
-                </li>
+                </div>
 
-                <li className="flex gap-3">
-                  <span className="mt-0.5 h-5 w-5 rounded-full bg-sky-500/15 border border-sky-500/60 flex items-center justify-center text-[10px]">
-                    ②
-                  </span>
+                <div className="flex gap-4">
+                  <div className="h-9 w-9 rounded-full bg-sky-500/15 border border-sky-500/40 text-sky-300 flex items-center justify-center font-semibold text-sm">
+                    2
+                  </div>
                   <div>
                     <p className="font-medium text-slate-100">
-                      Validação & consistência
+                      Validação e consistência
                     </p>
-                    <p className="text-slate-400">
-                      O backend verifica estrutura e dados de cada arquivo.
+                    <p className="text-slate-400 text-sm">
+                      O backend checa estrutura, colunas e integridade dos dados.
                     </p>
                   </div>
-                </li>
+                </div>
 
-                <li className="flex gap-3">
-                  <span className="mt-0.5 h-5 w-5 rounded-full bg-sky-500/15 border border-sky-500/60 flex items-center justify-center text-[10px]">
-                    ③
-                  </span>
+                <div className="flex gap-4">
+                  <div className="h-9 w-9 rounded-full bg-sky-500/15 border border-sky-500/40 text-sky-300 flex items-center justify-center font-semibold text-sm">
+                    3
+                  </div>
                   <div>
                     <p className="font-medium text-slate-100">
                       Resumo por arquivo
                     </p>
-                    <p className="text-slate-400">
+                    <p className="text-slate-400 text-sm">
                       Cada arquivo retorna um relatório individual.
                     </p>
                   </div>
-                </li>
-              </ol>
+                </div>
+
+              </div>
             </div>
 
-            {/* Status */}
-            <div className="grid sm:grid-cols-3 gap-3 text-xs sm:text-sm">
+            {/* MINI CARDS (AGORA ALINHAM PERFEITO COM A DIREITA) */}
+            <div className="mt-8 grid sm:grid-cols-3 gap-3 text-xs sm:text-sm">
+
               <div className="rounded-2xl bg-slate-900/80 border border-slate-800 px-4 py-3">
-                <p className="text-slate-400">Arquivos selecionados</p>
-                <p className="font-semibold text-sky-300 truncate">
-                  {humanFileInfo}
-                </p>
+                <p className="text-slate-400">Selecionados</p>
+                <p className="font-semibold text-sky-300 truncate">{humanFileInfo}</p>
               </div>
 
               <div className="rounded-2xl bg-slate-900/80 border border-slate-800 px-4 py-3">
-                <p className="text-slate-400">Status atual</p>
+                <p className="text-slate-400">Status</p>
                 <p className="font-semibold">
-                  {loading
-                    ? "Processando..."
-                    : results.length > 0
-                    ? "Concluído"
-                    : "Aguardando upload"}
+                  {loading ? "Processando..." : results.length > 0 ? "Concluído" : "Aguardando"}
                 </p>
               </div>
 
               <div className="rounded-2xl bg-slate-900/80 border border-slate-800 px-4 py-3">
                 <p className="text-slate-400">Próximo passo</p>
                 <p className="font-semibold text-emerald-300">
-                  {results.length > 0
-                    ? "Revisar retorno"
-                    : "Selecionar arquivos"}
+                  {results.length > 0 ? "Revisar retorno" : "Enviar arquivos"}
                 </p>
               </div>
+
             </div>
           </div>
 
-          {/* DIREITA – upload */}
-          <div className="space-y-6">
-            <div className="rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl shadow-sky-900/40 p-6 sm:p-7 backdrop-blur">
+          {/* =============== COLUNA DIREITA (ALINHAMENTO FIXO) =============== */}
+          <div className="flex flex-col h-full space-y-6">
+
+            <div className="rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl shadow-sky-900/40 p-7 backdrop-blur">
               <h2 className="text-base font-semibold text-slate-100 mb-4 flex items-center gap-2">
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300 text-sm">
                   ↑
                 </span>
-                Enviar arquivos (.xlsx, .csv, etc)
+                Enviar arquivos
               </h2>
 
-              {/* Dropzone */}
+              {/* DROPZONE */}
               <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragging(true);
-                }}
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`relative border-2 border-dashed rounded-2xl px-4 py-8 sm:px-6 sm:py-10 cursor-pointer transition ${
-                  dragging
+                className={`
+                  relative border-2 border-dashed rounded-2xl px-4 py-10 cursor-pointer transition
+                  ${dragging
                     ? "border-sky-400 bg-sky-500/10"
-                    : "border-slate-700 bg-slate-900/60 hover:border-sky-500/80 hover:bg-slate-900/80"
-                }`}
+                    : "border-slate-700 bg-slate-900/60 hover:border-sky-500/80 hover:bg-slate-900/70"}
+                `}
               >
                 <input
                   ref={fileInputRef}
@@ -254,56 +238,56 @@ export default function Upload() {
                   <div>
                     <p className="font-medium text-slate-50">
                       {files.length > 0
-                        ? `${files.length} arquivo(s) pronto(s)`
-                        : "Arraste ou clique para selecionar vários arquivos"}
+                        ? `${files.length} arquivo(s) selecionado(s)`
+                        : "Arraste ou clique para selecionar"}
                     </p>
+
                     <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                      Aceita múltiplos formatos{" "}
-                      <span className="font-semibold text-sky-300">
-                        .xlsx, .csv, .txt…
+                      Formatos aceitos:{" "}
+                      <span className="text-sky-300 font-semibold">
+                        .xlsx, .csv, .txt
                       </span>
                     </p>
                   </div>
 
                   {files.length > 0 && (
-                    <div className="mt-2 inline-flex flex-col items-center gap-1 bg-slate-900/90 border border-slate-700 px-3 py-2 rounded-2xl text-xs text-slate-200 max-h-28 overflow-auto">
+                    <div className="mt-3 inline-flex flex-col items-center gap-1 bg-slate-900/90 border border-slate-700 px-3 py-2 rounded-xl text-xs text-slate-200 max-h-28 overflow-auto">
                       {files.map((f) => (
-                        <span key={f.name} className="truncate max-w-[240px]">
-                          {f.name}
-                        </span>
+                        <span key={f.name} className="truncate max-w-[240px]">{f.name}</span>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Botão */}
-              <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              {/* BOTÃO */}
+              <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <button
                   onClick={upload}
                   disabled={files.length === 0 || loading}
-                  className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold transition w-full sm:w-auto ${
-                    files.length === 0 || loading
-                      ? "bg-sky-500/40 text-slate-200 cursor-not-allowed"
-                      : "bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-lg shadow-sky-900/40"
-                  }`}
+                  className={`
+                    inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition
+                    w-full sm:w-auto
+                    ${
+                      files.length === 0 || loading
+                        ? "bg-sky-500/40 text-slate-200 cursor-not-allowed"
+                        : "bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-lg shadow-sky-900/40"
+                    }
+                  `}
                 >
                   {loading ? (
                     <>
-                      <span className="h-4 w-4 rounded-full border-2 border-slate-950/10 border-t-slate-950 animate-spin" />
-                      Processando arquivos...
+                      <span className="h-4 w-4 rounded-full border-2 border-slate-950/20 border-t-slate-950 animate-spin" />
+                      Processando...
                     </>
-                  ) : (
-                    <>Enviar para processamento</>
-                  )}
+                  ) : "Enviar para processamento"}
                 </button>
 
                 <p className="text-[11px] sm:text-xs text-slate-400">
-                  Todos os arquivos serão enviados individualmente.
+                  Cada arquivo será enviado individualmente.
                 </p>
               </div>
 
-              {/* Barra de progresso */}
               {loading && (
                 <div className="mt-4 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
                   <div className="h-full w-full rounded-full bg-gradient-to-r from-sky-400 via-emerald-400 to-sky-500 animate-[pulse_1.4s_ease-in-out_infinite]" />
@@ -315,47 +299,30 @@ export default function Upload() {
             {results.length > 0 && (
               <div className="space-y-6">
                 {results.map((res, index) => (
-                  <div
-                    key={index}
-                    className="rounded-3xl bg-slate-950/80 border border-slate-800 shadow-lg shadow-slate-900/60 p-5 sm:p-6"
-                  >
+                  <div key={index} className="rounded-3xl bg-slate-950/80 border border-slate-800 shadow-lg p-6">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm sm:text-base font-semibold text-slate-100">
                         Resultado — {res.file}
                       </h3>
                       <span
-                        className={`text-[11px] px-2 py-1 rounded-full ${
-                          res.error
-                            ? "bg-rose-800/40 text-rose-300"
-                            : "bg-slate-800 text-slate-300"
-                        }`}
+                        className={`
+                          text-[11px] px-2 py-1 rounded-full
+                          ${
+                            res.error
+                              ? "bg-rose-800/40 text-rose-300"
+                              : "bg-slate-800 text-slate-300"
+                          }
+                        `}
                       >
                         {res.error ? "Erro" : "OK"}
                       </span>
                     </div>
 
-                    {!res.error && (
-                      <div className="mb-3 text-xs sm:text-sm text-slate-300">
-                        <p>
-                          <span className="text-slate-400">Arquivo: </span>
-                          <span className="text-sky-300 font-medium">
-                            {res.data && res.data.arquivo ? res.data.arquivo : "—"}
-                          </span>
-                        </p>
-                      </div>
-                    )}
-
                     <button
-                      onClick={() =>
-                        setShowLogIndex(
-                          showLogIndex === index ? null : index
-                        )
-                      }
-                      className="text-sky-300 text-xs font-medium hover:underline transition"
+                      onClick={() => setShowLogIndex(showLogIndex === index ? null : index)}
+                      className="text-sky-300 text-xs font-medium hover:underline"
                     >
-                      {showLogIndex === index
-                        ? "Ocultar log ▲"
-                        : "Ver log detalhado ▼"}
+                      {showLogIndex === index ? "Ocultar log ▲" : "Ver log detalhado ▼"}
                     </button>
 
                     {showLogIndex === index && (
@@ -369,9 +336,10 @@ export default function Upload() {
                 ))}
               </div>
             )}
+
           </div>
         </div>
-      </div>
+      </PageLayout>
 
       <style>
         {`
@@ -383,10 +351,7 @@ export default function Upload() {
         `}
       </style>
 
-      <HistoricoModal
-        open={showHistory}
-        onClose={() => setShowHistory(false)}
-      />
+      <HistoricoModal open={showHistory} onClose={() => setShowHistory(false)} />
     </>
   );
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDashboard } from "../DashboardContext";
 import Card from "../components/ui/Card";
@@ -6,8 +6,9 @@ import Select from "../components/ui/Select";
 import { MESES } from "../utils/theme";
 import { formatMesRef } from "../utils/formatters";
 
-const ANOS = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i));
-
+const ANOS = Array.from({ length: 5 }, (_, i) =>
+  String(new Date().getFullYear() - i)
+);
 
 export default function DashboardFilters() {
   const {
@@ -22,14 +23,25 @@ export default function DashboardFilters() {
     periodoFim,
     setPeriodoFim,
     dados,
+    mesRefCustom,
+    setMesRefCustom,
   } = useDashboard();
 
-  
   const navigate = useNavigate();
+
+  const [allMonths, setAllMonths] = useState([]);
+
+  useEffect(() => {
+    const months = dados?.filtros?.periodo?.todos_meses || [];
+    if (months.length > allMonths.length) {
+      setAllMonths(months);
+    }
+  }, [dados, allMonths]);
 
   const handleClinicaChange = (newClinicaId) => {
     setClinicaId(newClinicaId);
-    const newSearch = newClinicaId === 'todas' ? '' : `?clinica=${newClinicaId}`;
+    const newSearch =
+      newClinicaId === "todas" ? "" : `?clinica=${newClinicaId}`;
     navigate(`/admin/dashboard${newSearch}`, { replace: true });
   };
 
@@ -48,7 +60,7 @@ export default function DashboardFilters() {
 
   return (
     <Card className="p-6 mb-6">
-      {/* Título */}
+      {/* TÍTULO */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-slate-200">
           Filtros do Painel
@@ -70,8 +82,9 @@ export default function DashboardFilters() {
 
       {/* GRID */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
+        {/* ======================= */}
         {/* CLÍNICA */}
+        {/* ======================= */}
         <div className="flex flex-col gap-1">
           <span className="text-[11px] uppercase tracking-wide text-slate-500">
             Clínica
@@ -90,14 +103,14 @@ export default function DashboardFilters() {
             ]}
           />
 
-
-
           {loadingClinicas && (
             <span className="text-[10px] text-slate-500">Carregando...</span>
           )}
         </div>
 
+        {/* ======================= */}
         {/* JANELA TEMPORAL */}
+        {/* ======================= */}
         <div className="flex flex-col gap-1">
           <span className="text-[11px] uppercase tracking-wide text-slate-500">
             Janela móvel
@@ -121,8 +134,37 @@ export default function DashboardFilters() {
           )}
         </div>
 
-        {/* PERÍODO PERSONALIZADO */}
+        {/* ======================= */}
+        {/* FECHAR ATÉ O MÊS */}
+        {/* ======================= */}
         <div className="flex flex-col gap-1">
+          <span className="text-[11px] uppercase tracking-wide text-slate-500">
+            Fechar até o mês
+          </span>
+
+          <Select
+            value={mesRefCustom || ""}
+            onChange={(v) => setMesRefCustom(v)}
+            options={[
+              { label: "Último mês fechado", value: "" },
+              ...(allMonths || []).map((m) => ({
+                label: formatMesRef(m),
+                value: m,
+              })),
+            ]}
+          />
+
+          {mesRefCustom && (
+            <span className="text-[10px] text-amber-400 mt-1">
+              Motor usando {formatMesRef(mesRefCustom)} como referência final.
+            </span>
+          )}
+        </div>
+
+        {/* ======================= */}
+        {/* PERÍODO PERSONALIZADO */}
+        {/* ======================= */}
+        <div className="flex flex-col gap-1 md:col-span-3">
           <span className="text-[11px] uppercase tracking-wide text-slate-500">
             Período personalizado
           </span>
@@ -132,25 +174,25 @@ export default function DashboardFilters() {
             <Select
               value={inicioMes}
               onChange={(mes) => {
-                if (!mes) {
-                  setPeriodoInicio("");
-                  return;
-                }
+                if (!mes) return setPeriodoInicio("");
                 setPeriodoInicio(`${inicioAno || ANOS[0]}-${mes}`);
               }}
-              options={[{ label: "Mês", value: "" }, ...MESES.map(m => ({ label: m.label, value: m.value }))]}
+              options={[
+                { label: "Mês", value: "" },
+                ...MESES.map((m) => ({ label: m.label, value: m.value })),
+              ]}
             />
 
             <Select
               value={inicioAno}
               onChange={(ano) => {
-                if (!ano) {
-                  setPeriodoInicio("");
-                  return;
-                }
+                if (!ano) return setPeriodoInicio("");
                 setPeriodoInicio(`${ano}-${inicioMes || "01"}`);
               }}
-              options={[{ label: "Ano", value: "" }, ...ANOS.map((a) => ({ label: a, value: a }))]}
+              options={[
+                { label: "Ano", value: "" },
+                ...ANOS.map((a) => ({ label: a, value: a })),
+              ]}
             />
           </div>
 
@@ -159,25 +201,25 @@ export default function DashboardFilters() {
             <Select
               value={fimMes}
               onChange={(mes) => {
-                if (!mes) {
-                  setPeriodoFim("");
-                  return;
-                }
+                if (!mes) return setPeriodoFim("");
                 setPeriodoFim(`${inicioAno || ANOS[0]}-${mes}`);
               }}
-              options={[{ label: "Mês", value: "" }, ...MESES.map(m => ({ label: m.label, value: m.value }))]}
+              options={[
+                { label: "Mês", value: "" },
+                ...MESES.map((m) => ({ label: m.label, value: m.value })),
+              ]}
             />
 
             <Select
               value={fimAno}
               onChange={(ano) => {
-                if (!ano) {
-                  setPeriodoFim("");
-                  return;
-                }
+                if (!ano) return setPeriodoFim("");
                 setPeriodoFim(`${ano}-${fimMes || "12"}`);
               }}
-              options={[{ label: "Ano", value: "" }, ...ANOS.map((a) => ({ label: a, value: a }))]}
+              options={[
+                { label: "Ano", value: "" },
+                ...ANOS.map((a) => ({ label: a, value: a })),
+              ]}
             />
           </div>
 

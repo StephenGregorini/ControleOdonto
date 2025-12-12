@@ -8,9 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from processor import processar_excel
-
-
-
 from io import BytesIO
 from openpyxl import Workbook
 from fastapi.encoders import jsonable_encoder
@@ -138,20 +135,16 @@ class DashboardData(BaseModel):
 
 app = FastAPI(title="MedSimples · Importação de dados")
 
-from fastapi.middleware.cors import CORSMiddleware
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://medsimples-controleodonto.up.railway.app",
-        "http://localhost:5173",
-        "*"
+        "http://localhost:5173"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.get("/")
 def read_root():
@@ -643,6 +636,37 @@ def _format_mes_ref(dt: Timestamp | None):
         return dt.strftime("%Y-%m")
     except Exception:
         return None
+    
+
+# ==========================
+# FUNÇÃO AUXILIAR — ÚLTIMO MÊS FECHADO
+# ==========================
+def identificar_ultimo_mes_fechado(df_importacoes, clinica_id):
+    """
+    Retorna o último mês realmente fechado para uma clínica com base
+    na data de importação.
+    """
+    df = df_importacoes[df_importacoes["clinica_id"] == clinica_id].copy()
+    if df.empty:
+        return None
+
+    df["criado_em"] = pd.to_datetime(df["criado_em"], errors="coerce")
+    df["mes_ref_date"] = pd.to_datetime(
+        df["mes_ref"].astype(str) + "-01",
+        errors="coerce"
+    )
+
+    # Mês está fechado se foi importado após o fim do próprio mês
+    df["fechado"] = df.apply(
+        lambda r: r["criado_em"].date() >= (r["mes_ref_date"] + pd.offsets.MonthEnd(0)).date() + pd.Timedelta(days=1),
+        axis=1
+    )
+
+    df_fechado = df[df["fechado"] == True]
+    if df_fechado.empty:
+        return None
+
+    return df_fechado["mes_ref_date"].max()
 
 
 @app.get("/dashboard/clinicas")
@@ -711,8 +735,9 @@ def _fator_limite_score(s):
 async def dashboard_completo(
     clinica_id: str | None = None,
     meses: int = 12,
-    inicio: str | None = None,  # "YYYY-MM"
-    fim: str | None = None,      # "YYYY-MM"
+    inicio: str | None = None,
+    fim: str | None = None,
+    mes_ref_custom: str | None = None,  # 👈 novo parâmetro!
 ):
     """
     Dashboard completo de CRÉDITO & RISCO usando `vw_dashboard_final`.
@@ -1107,99 +1132,123 @@ async def dashboard_completo(
 
     if clinica_id:
         df_clin_all = df[df["clinica_id"] == clinica_id].copy()
-        if not df_clin_all.empty:
+
+        # Buscar histórico de importações
+        import_rows = supabase_get(
+            "importacoes",
+            select="clinica_id, criado_em, mes_ref",
+            extra_params={"clinica_id": f"eq.{clinica_id}"}
+        )
+        df_import = to_df(import_rows)
+
+        # Identificar o último mês realmente fechado
+        ultimo_mes_fechado = identificar_ultimo_mes_fechado(df_import, clinica_id)
+
+        # Se não houver mês fechado, usa o mais recente mesmo
+        if ultimo_mes_fechado is None:
             last_dt_clin = df_clin_all["mes_ref_date"].max()
+        else:
+            last_dt_clin = ultimo_mes_fechado
 
-            # 10.1 Janela 12M da clínica
-            dt_inicio_12m_clin = last_dt_clin - pd.DateOffset(months=11)
-            df_clin_12m = df_clin_all[
-                df_clin_all["mes_ref_date"] >= dt_inicio_12m_clin
-            ].copy()
-            if df_clin_12m.empty:
-                df_clin_12m = df_clin_all.copy()
+        # 👇 override opcional pelo parâmetro mes_ref_custom (AAAA-MM)
+        if mes_ref_custom:
+            try:
+                last_dt_clin = pd.to_datetime(str(mes_ref_custom) + "-01", errors="raise")
+            except Exception:
+                print("⚠️ mes_ref_custom inválido:", mes_ref_custom)
+                # mantém last_dt_clin original se estiver inválido
 
-            total_emit_12m_clin = _safe_float(df_clin_12m["valor_total_emitido"].sum())
-            n_meses_12m_clin = int(df_clin_12m["mes_ref_date"].nunique() or 0)
 
-            if n_meses_12m_clin > 0 and total_emit_12m_clin is not None:
-                limite_sugerido_base_media12m = total_emit_12m_clin / n_meses_12m_clin
+        # 10.1 Janela 12M da clínica
+        dt_inicio_12m_clin = last_dt_clin - pd.DateOffset(months=11)
+        df_clin_12m = df_clin_all[
+            df_clin_all["mes_ref_date"] >= dt_inicio_12m_clin
+        ].copy()
+        if df_clin_12m.empty:
+            df_clin_12m = df_clin_all.copy()
 
-            # 10.2 Janela 3M da clínica
-            dt_inicio_3m = last_dt_clin - pd.DateOffset(months=2)
-            df_last3 = df_clin_all[
-                (df_clin_all["mes_ref_date"] >= dt_inicio_3m)
-                & (df_clin_all["mes_ref_date"] <= last_dt_clin)
-            ].copy()
-            if not df_last3.empty:
-                limite_sugerido_base_media3m = _safe_float(
-                    df_last3["valor_total_emitido"].mean()
+        total_emit_12m_clin = _safe_float(df_clin_12m["valor_total_emitido"].sum())
+        n_meses_12m_clin = int(df_clin_12m["mes_ref_date"].nunique() or 0)
+
+        if n_meses_12m_clin > 0 and total_emit_12m_clin is not None:
+            limite_sugerido_base_media12m = total_emit_12m_clin / n_meses_12m_clin
+
+        # 10.2 Janela 3M da clínica
+        dt_inicio_3m = last_dt_clin - pd.DateOffset(months=2)
+        df_last3 = df_clin_all[
+            (df_clin_all["mes_ref_date"] >= dt_inicio_3m)
+            & (df_clin_all["mes_ref_date"] <= last_dt_clin)
+        ].copy()
+        if not df_last3.empty:
+            limite_sugerido_base_media3m = _safe_float(
+                df_last3["valor_total_emitido"].mean()
+            )
+
+        # 10.3 Último mês da clínica
+        df_ultimo_mes_clin = df_clin_all[
+            df_clin_all["mes_ref_date"] == last_dt_clin
+        ].copy()
+        if not df_ultimo_mes_clin.empty:
+            limite_sugerido_base_ultimo_mes = _safe_float(
+                df_ultimo_mes_clin["valor_total_emitido"].sum()
+            )
+
+        # 10.4 Base mensal combinada (12M, 3M, último mês)
+        componentes = []
+        pesos = []
+
+        if limite_sugerido_base_media12m is not None:
+            componentes.append(limite_sugerido_base_media12m)
+            pesos.append(0.50)
+        if limite_sugerido_base_media3m is not None:
+            componentes.append(limite_sugerido_base_media3m)
+            pesos.append(0.30)
+        if limite_sugerido_base_ultimo_mes is not None:
+            componentes.append(limite_sugerido_base_ultimo_mes)
+            pesos.append(0.20)
+
+        if componentes and sum(pesos) > 0:
+            limite_sugerido_base_mensal_mix = sum(
+                c * p for c, p in zip(componentes, pesos)
+            ) / sum(pesos)
+        else:
+            limite_sugerido_base_mensal_mix = None
+
+        # 10.5 Share da clínica na carteira (12M)
+        dt_inicio_12m_share = last_dt_clin - pd.DateOffset(months=11)
+        df_port_12m = df[df["mes_ref_date"] >= dt_inicio_12m_share].copy()
+        if not df_port_12m.empty and total_emit_12m_clin is not None:
+            total_emit_portfolio_12m = _safe_float(
+                df_port_12m["valor_total_emitido"].sum()
+            )
+            if total_emit_portfolio_12m and total_emit_portfolio_12m > 0:
+                limite_sugerido_share_portfolio_12m = _safe_float(
+                    total_emit_12m_clin / total_emit_portfolio_12m
                 )
 
-            # 10.3 Último mês da clínica
-            df_ultimo_mes_clin = df_clin_all[
-                df_clin_all["mes_ref_date"] == last_dt_clin
-            ].copy()
-            if not df_ultimo_mes_clin.empty:
-                limite_sugerido_base_ultimo_mes = _safe_float(
-                    df_ultimo_mes_clin["valor_total_emitido"].sum()
-                )
+        # 🔥 Usa o score do último mês da CLÍNICA, não do período filtrado
+        score_para_limite = _safe_float(df_ultimo_mes_clin["score_ajustado"].mean())
+        limite_sugerido_fator = _fator_limite_score(score_para_limite)
 
-            # 10.4 Base mensal combinada (12M, 3M, último mês)
-            componentes = []
-            pesos = []
+        base_para_limite = limite_sugerido_base_mensal_mix or 0.0
+        bruto = base_para_limite * (limite_sugerido_fator or 0.0)
 
-            if limite_sugerido_base_media12m is not None:
-                componentes.append(limite_sugerido_base_media12m)
-                pesos.append(0.50)
-            if limite_sugerido_base_media3m is not None:
-                componentes.append(limite_sugerido_base_media3m)
-                pesos.append(0.30)
-            if limite_sugerido_base_ultimo_mes is not None:
-                componentes.append(limite_sugerido_base_ultimo_mes)
-                pesos.append(0.20)
+        if bruto and bruto > 0:
+            # Nova trava de segurança: 150% do MAIOR faturamento base (1M, 3M, 12M)
+            bases_validas = [
+                b for b in [
+                    limite_sugerido_base_media12m,
+                    limite_sugerido_base_media3m,
+                    limite_sugerido_base_ultimo_mes
+                ] if b is not None and b > 0
+            ]
+            maior_base = max(bases_validas) if bases_validas else 0
+            teto_dinamico = 1.5 * maior_base
 
-            if componentes and sum(pesos) > 0:
-                limite_sugerido_base_mensal_mix = sum(
-                    c * p for c, p in zip(componentes, pesos)
-                ) / sum(pesos)
-            else:
-                limite_sugerido_base_mensal_mix = None
+            limite_sugerido = min(bruto, teto_dinamico, LIMITE_TETO_GLOBAL)
+        else:
+            limite_sugerido = None
 
-            # 10.5 Share da clínica na carteira (12M)
-            dt_inicio_12m_share = last_dt_clin - pd.DateOffset(months=11)
-            df_port_12m = df[df["mes_ref_date"] >= dt_inicio_12m_share].copy()
-            if not df_port_12m.empty and total_emit_12m_clin is not None:
-                total_emit_portfolio_12m = _safe_float(
-                    df_port_12m["valor_total_emitido"].sum()
-                )
-                if total_emit_portfolio_12m and total_emit_portfolio_12m > 0:
-                    limite_sugerido_share_portfolio_12m = _safe_float(
-                        total_emit_12m_clin / total_emit_portfolio_12m
-                    )
-
-            # 🔥 Usa o score do último mês da CLÍNICA, não do período filtrado
-            score_para_limite = _safe_float(df_ultimo_mes_clin["score_ajustado"].mean())
-            limite_sugerido_fator = _fator_limite_score(score_para_limite)
-
-            base_para_limite = limite_sugerido_base_mensal_mix or 0.0
-            bruto = base_para_limite * (limite_sugerido_fator or 0.0)
-
-            if bruto and bruto > 0:
-                # Nova trava de segurança: 150% do MAIOR faturamento base (1M, 3M, 12M)
-                bases_validas = [
-                    b for b in [
-                        limite_sugerido_base_media12m,
-                        limite_sugerido_base_media3m,
-                        limite_sugerido_base_ultimo_mes
-                    ] if b is not None and b > 0
-                ]
-                maior_base = max(bases_validas) if bases_validas else 0
-                teto_dinamico = 1.5 * maior_base
-
-                limite_sugerido = min(bruto, teto_dinamico, LIMITE_TETO_GLOBAL)
-
-            else:
-                limite_sugerido = None
 
     # --------------------------
     # 11) Séries temporais
@@ -1390,6 +1439,9 @@ async def dashboard_completo(
             "periodo": {
                 "min_mes_ref": _format_mes_ref(min_dt),
                 "max_mes_ref": _format_mes_ref(max_dt),
+                "todos_meses": sorted(
+                    {_format_mes_ref(m) for m in df["mes_ref_date"].unique() if m is not None}
+                )
             }
         },
         "contexto": {

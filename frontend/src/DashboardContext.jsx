@@ -17,6 +17,7 @@ export function DashboardProvider({ children }) {
   const [janelaMeses, setJanelaMeses] = useState(12);
   const [periodoInicio, setPeriodoInicio] = useState("");
   const [periodoFim, setPeriodoFim] = useState("");
+  const [mesRefCustom, setMesRefCustom] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -63,10 +64,14 @@ export function DashboardProvider({ children }) {
 
     panelLimiteAberto,
     setPanelLimiteAberto,
-    
+
     activeTab,
     setActiveTab,
+    
+    mesRefCustom,
+    setMesRefCustom,
   };
+
 
   return (
     <DashboardContext.Provider value={value}>

@@ -257,20 +257,36 @@ def parse_excel_from_bytes(contents: bytes):
             titulo = df.iloc[i, 0]
 
             if isinstance(titulo, str) and titulo.strip() not in ("", "CNPJ"):
-                header = df.iloc[i + 1]
+                # ...
+                header = df.iloc[i + 1] if (i + 1) < nrows else None
 
-                is_header_ok = any(isinstance(c, str) and "MesRef" in c for c in header)
+                is_header_ok = False
+                if header is not None:
+                    is_header_ok = any(isinstance(c, str) and "MesRef" in c for c in header)
 
-                # Detecta caso especial: bloco sem header mas com datas logo abaixo
+                # ✅ evita estourar quando nrows < 3
+                has_row_i2 = (i + 2) < nrows
+
+                # caso especial original (título + "header" + dados)
                 is_header_missing_but_valid = (
-                    not is_header_ok
-                    and isinstance(df.iloc[i+2, 0], datetime)
+                    (not is_header_ok)
+                    and has_row_i2
+                    and isinstance(df.iloc[i + 2, 0], datetime)
                 )
 
-                if is_header_ok or is_header_missing_but_valid:
+                # ✅ NOVO: caso ainda mais comum (título + dados direto, sem header)
+                is_title_plus_data_only = (
+                    (not is_header_ok)
+                    and (i + 1) < nrows
+                    and isinstance(df.iloc[i + 1, 0], datetime)
+                )
+
+                if is_header_ok or is_header_missing_but_valid or is_title_plus_data_only:
 
                     rows = []
-                    j = i + 2
+
+                    # ✅ se for "título + dados direto", começa no i+1
+                    j = (i + 1) if is_title_plus_data_only else (i + 2)
 
                     while j < nrows:
                         row = df.iloc[j]
@@ -289,7 +305,6 @@ def parse_excel_from_bytes(contents: bytes):
             i += 1
 
     return result
-
 
 # ==========================
 # TABELAS & CHAVES
@@ -313,12 +328,29 @@ TABELAS_CONFLITO = {
 def registrar_importacao(clinica_id, arquivo_nome, parsed, contagem):
     url = f"{SUPABASE_URL}/rest/v1/importacoes"
 
+    # Extrair o mes_ref do arquivo importado
+    mes_ref = None
+
+    # tenta pegar dos boletos
+    if parsed.get("boletos_emitidos") and len(parsed["boletos_emitidos"]) > 0:
+        mes_ref = parsed["boletos_emitidos"][0].get("mes_ref")
+
+    # fallback caso boletos estejam vazios
+    if not mes_ref:
+        # procura em qualquer outra tabela
+        for key in parsed:
+            if isinstance(parsed[key], list) and len(parsed[key]) > 0:
+                if "mes_ref" in parsed[key][0]:
+                    mes_ref = parsed[key][0]["mes_ref"]
+                    break
+
     payload = {
         "clinica_id": clinica_id,
         "arquivo_nome": arquivo_nome,
         "total_linhas": sum(contagem.values()),
         "status": "concluido",
-        "log": contagem
+        "log": contagem,
+        "mes_ref": mes_ref  # 🔥 AGORA SALVAMOS O MES_REF
     }
 
     requests.post(url, headers=HEADERS, json=payload)

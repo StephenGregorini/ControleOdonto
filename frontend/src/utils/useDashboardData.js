@@ -13,7 +13,13 @@ async function fetchHistoricoLimites(clinicaId) {
   }
 }
 
-export function useDashboardData({ clinicaId, janelaMeses, inicio, fim }) {
+export function useDashboardData({
+  clinicaId,
+  janelaMeses,
+  inicio,
+  fim,
+  mesRefCustom,        // 🔥 Agora vem por argumentos
+}) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,6 +31,7 @@ export function useDashboardData({ clinicaId, janelaMeses, inicio, fim }) {
 
       const params = new URLSearchParams();
 
+      // período custom
       if (inicio && fim) {
         params.set("inicio", inicio);
         params.set("fim", fim);
@@ -32,10 +39,14 @@ export function useDashboardData({ clinicaId, janelaMeses, inicio, fim }) {
         params.set("meses", janelaMeses || 12);
       }
 
-      // 🔥 Aqui é a correção:
-      // Sempre faz fetch — só adiciona clinica_id quando NÃO for "todas"
+      // clinica
       if (clinicaId && clinicaId !== "todas") {
         params.set("clinica_id", clinicaId);
+      }
+
+      // 🔥 mês de referência forçado
+      if (mesRefCustom) {
+        params.set("mes_ref_custom", mesRefCustom);
       }
 
       const url = `${API_BASE_URL}/dashboard?${params.toString()}`;
@@ -58,7 +69,7 @@ export function useDashboardData({ clinicaId, janelaMeses, inicio, fim }) {
 
   useEffect(() => {
     carregar();
-  }, [clinicaId, janelaMeses, inicio, fim]);
+  }, [clinicaId, janelaMeses, inicio, fim, mesRefCustom]);
 
   return {
     dados,

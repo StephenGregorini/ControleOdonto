@@ -656,11 +656,14 @@ def identificar_ultimo_mes_fechado(df_importacoes, clinica_id):
         errors="coerce"
     )
 
+    df.dropna(subset=["criado_em", "mes_ref_date"], inplace=True)
+    
+    if df.empty:
+        return None
+
     # Mês está fechado se foi importado após o fim do próprio mês
-    df["fechado"] = df.apply(
-        lambda r: r["criado_em"].date() >= (r["mes_ref_date"] + pd.offsets.MonthEnd(0)).date() + pd.Timedelta(days=1),
-        axis=1
-    )
+    end_of_month = df["mes_ref_date"] + pd.offsets.MonthEnd(0)
+    df["fechado"] = df["criado_em"].dt.date >= (end_of_month + pd.Timedelta(days=1)).dt.date
 
     df_fechado = df[df["fechado"] == True]
     if df_fechado.empty:
@@ -752,752 +755,760 @@ async def dashboard_completo(
     - Calcula um LIMITE SUGERIDO conservador por clínica (quando clinica_id é enviado)
       usando a média dos últimos 12 meses, 3 meses, último mês e o score.
     """
-
-    # --------------------------
-    # 1) Carregar dados da view
-    # --------------------------
-    extra = {}
     try:
-        rows = supabase_get("vw_dashboard_final", select="*", extra_params=extra)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro ao carregar dados do dashboard: {e}",
-        )
-
-    df = to_df(rows)
-
-    if df.empty:
-        return {
-            "filtros": {"periodo": {"min_mes_ref": None, "max_mes_ref": None}},
-            "contexto": {
-                "clinica_id": clinica_id,
-                "clinica_nome": "Sem dados",
-            },
-            "kpis": {},
-            "series": {},
-            "ranking_clinicas": [],
-        }
-
-    # --------------------------
-    # 2) Preparar datas
-    # --------------------------
-    if "mes_ref_date" in df.columns:
-        df["mes_ref_date"] = pd.to_datetime(df["mes_ref_date"], errors="coerce")
-    else:
-        df["mes_ref_date"] = pd.to_datetime(df["mes_ref"], errors="coerce")
-
-    df = df.dropna(subset=["mes_ref_date"])
-
-    # Ignorar sempre o mês em aberto (mês atual)
-    hoje_utc = datetime.utcnow()
-    primeiro_dia_mes_atual = hoje_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0).date()
-    df = df[df["mes_ref_date"].dt.date < primeiro_dia_mes_atual]
-
-    if df.empty:
-        return {
-            "filtros": {"periodo": {"min_mes_ref": None, "max_mes_ref": None}},
-            "contexto": {
-                "clinica_id": clinica_id,
-                "clinica_nome": "Sem dados válidos (mês em aberto ignorado)",
-            },
-            "kpis": {},
-            "series": {},
-            "ranking_clinicas": [],
-        }
-
-    # --------------------------
-    # 3) Tipos numéricos
-    # --------------------------
-    def _num(col, fill=None):
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-            if fill is not None:
-                df[col] = df[col].fillna(fill)
-
-    _num("valor_total_emitido", fill=0)
-    _num("taxa_pago_no_vencimento")
-    _num("taxa_inadimplencia")
-    _num("tempo_medio_pagamento_dias")
-    _num("parc_media_parcelas_pond")
-    _num("valor_medio_boleto")
-    _num("limite_aprovado")
-
-    # --------------------------
-    # 4) Inadimplência REAL
-    # --------------------------
-    if "taxa_pago_no_vencimento" not in df.columns:
-        df["taxa_pago_no_vencimento"] = 0.0
-    if "taxa_inadimplencia" not in df.columns:
-        df["taxa_inadimplencia"] = 0.0
-
-    df["taxa_pago_no_vencimento"] = df["taxa_pago_no_vencimento"].clip(0, 1)
-    df["taxa_inad_dos_atrasados"] = df["taxa_inadimplencia"].clip(0, 1)
-
-    df["valor_nao_pago_no_venc"] = df["valor_total_emitido"] * (
-        1 - df["taxa_pago_no_vencimento"]
-    )
-    df["valor_inad_real"] = df["valor_nao_pago_no_venc"] * df["taxa_inad_dos_atrasados"]
-
-    df["taxa_inadimplencia_real"] = None
-    mask_emitido = df["valor_total_emitido"] > 0
-    df.loc[mask_emitido, "taxa_inadimplencia_real"] = (
-        df.loc[mask_emitido, "valor_inad_real"] / df.loc[mask_emitido, "valor_total_emitido"]
-    )
-
-    # --------------------------
-    # 5) SCORE AJUSTADO
-    # --------------------------
-    def _clamp01(x):
+        # --------------------------
+        # 1) Carregar dados da view
+        # --------------------------
+        extra = {}
         try:
-            x = float(x)
-        except Exception:
-            return 0.0
-        if math.isnan(x):
-            return 0.0
-        return max(0.0, min(1.0, x))
-
-    def _calc_score_row(row):
-        inad_real = row.get("taxa_inadimplencia_real")  # sobre o total emitido
-        pago_venc = row.get("taxa_pago_no_vencimento")  # 0–1
-        dias = row.get("tempo_medio_pagamento_dias")
-        parc = row.get("parc_media_parcelas_pond")
-
-        # 1) Risco de inadimplência real (0 → 0%, 1 → 3%+)
-        risk_inad = 0.0
-        if inad_real is not None:
-            risk_inad = _clamp01(inad_real / 0.03)  # 3% vira risco 1
-
-        # 2) Risco de atraso (0 → 100% pago no venc., 1 → 25%+ fora do venc.)
-        risk_atraso = 0.0
-        if pago_venc is not None:
-            risk_atraso = _clamp01((1.0 - float(pago_venc)) / 0.25)
-
-        # 3) Risco de prazo (0 → 5 dias, 1 → 65 dias+)
-        risk_dias = 0.0
-        if dias is not None:
-            risk_dias = _clamp01((float(dias) - 5.0) / 60.0)
-
-        # 4) Risco de parcelamento (0 → 1 parcela, 1 → 12 parcelas+)
-        risk_parc = 0.0
-        if parc is not None:
-            risk_parc = _clamp01((float(parc) - 1.0) / 11.0)
-
-        # Pesos conservadores:
-        # inad 50%, atraso 25%, dias 15%, parcelas 10%
-        score = 1.0 - (
-            0.50 * risk_inad
-            + 0.25 * risk_atraso
-            + 0.15 * risk_dias
-            + 0.10 * risk_parc
-        )
-
-        return max(0.0, min(1.0, score))
-
-    df["score_ajustado"] = df.apply(_calc_score_row, axis=1)
-
-    def _categoria_from_score(s):
-        s = _safe_float(s)
-        if s is None:
-            return None
-        if s >= 0.80:
-            return "A"
-        if s >= 0.60:
-            return "B"
-        if s >= 0.40:
-            return "C"
-        if s >= 0.20:
-            return "D"
-        return "E"
-
-    df["categoria_risco_ajustada"] = df["score_ajustado"].apply(_categoria_from_score)
-
-    # --------------------------
-    # 6) Período global
-    # --------------------------
-    min_dt = df["mes_ref_date"].min()
-    max_dt = df["mes_ref_date"].max()
-
-    limite_inferior_default = max_dt - pd.DateOffset(months=meses - 1)
-
-    # --------------------------
-    # 7) Recorte de tempo
-    # --------------------------
-    if inicio and fim:
-        try:
-            dt_inicio = pd.to_datetime(inicio + "-01")
-            dt_fim = pd.to_datetime(fim + "-01") + pd.offsets.MonthEnd(0)
-            df_recorte = df[
-                (df["mes_ref_date"] >= dt_inicio)
-                & (df["mes_ref_date"] <= dt_fim)
-            ].copy()
+            rows = supabase_get("vw_dashboard_final", select="*", extra_params=extra)
         except Exception as e:
             raise HTTPException(
-                status_code=400,
-                detail=f"Parâmetros inicio/fim inválidos: {e}",
+                status_code=500,
+                detail=f"Erro ao carregar dados do dashboard: {e}",
             )
-    else:
-        df_recorte = df[df["mes_ref_date"] >= limite_inferior_default].copy()
 
-    # --------------------------
-    # 8) Contexto (clínica x geral)
-    # --------------------------
-    if clinica_id:
-        nomes = (
-            df[df["clinica_id"] == clinica_id]["clinica_nome"]
-            .dropna()
-            .unique()
-            .tolist()
+        df = to_df(rows)
+
+        if df.empty:
+            return {
+                "filtros": {"periodo": {"min_mes_ref": None, "max_mes_ref": None}},
+                "contexto": {
+                    "clinica_id": clinica_id,
+                    "clinica_nome": "Sem dados",
+                },
+                "kpis": {},
+                "series": {},
+                "ranking_clinicas": [],
+            }
+
+        # --------------------------
+        # 2) Preparar datas
+        # --------------------------
+        if "mes_ref_date" in df.columns:
+            df["mes_ref_date"] = pd.to_datetime(df["mes_ref_date"], errors="coerce")
+        else:
+            df["mes_ref_date"] = pd.to_datetime(df["mes_ref"], errors="coerce")
+
+        df = df.dropna(subset=["mes_ref_date"])
+
+        # Ignorar sempre o mês em aberto (mês atual)
+        hoje_utc = datetime.utcnow()
+        primeiro_dia_mes_atual = hoje_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0).date()
+        df = df[df["mes_ref_date"].dt.date < primeiro_dia_mes_atual]
+
+        if df.empty:
+            return {
+                "filtros": {"periodo": {"min_mes_ref": None, "max_mes_ref": None}},
+                "contexto": {
+                    "clinica_id": clinica_id,
+                    "clinica_nome": "Sem dados válidos (mês em aberto ignorado)",
+                },
+                "kpis": {},
+                "series": {},
+                "ranking_clinicas": [],
+            }
+
+        # --------------------------
+        # 3) Tipos numéricos
+        # --------------------------
+        def _num(col, fill=None):
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+                if fill is not None:
+                    df[col] = df[col].fillna(fill)
+
+        _num("valor_total_emitido", fill=0)
+        _num("taxa_pago_no_vencimento")
+        _num("taxa_inadimplencia")
+        _num("tempo_medio_pagamento_dias")
+        _num("parc_media_parcelas_pond")
+        _num("valor_medio_boleto")
+        _num("limite_aprovado")
+
+        # --------------------------
+        # 4) Inadimplência REAL
+        # --------------------------
+        if "taxa_pago_no_vencimento" not in df.columns:
+            df["taxa_pago_no_vencimento"] = 0.0
+        if "taxa_inadimplencia" not in df.columns:
+            df["taxa_inadimplencia"] = 0.0
+
+        df["taxa_pago_no_vencimento"] = df["taxa_pago_no_vencimento"].clip(0, 1)
+        df["taxa_inad_dos_atrasados"] = df["taxa_inadimplencia"].clip(0, 1)
+
+        df["valor_nao_pago_no_venc"] = df["valor_total_emitido"] * (
+            1 - df["taxa_pago_no_vencimento"]
         )
-        nome_clinica = nomes[0] if nomes else "Clínica selecionada"
-    else:
-        nome_clinica = "Todas as clínicas"
+        df["valor_inad_real"] = df["valor_nao_pago_no_venc"] * df["taxa_inad_dos_atrasados"]
 
-    if clinica_id:
-        df_ctx = df_recorte[df_recorte["clinica_id"] == clinica_id].copy()
-    else:
-        df_ctx = df_recorte.copy()
+        df["taxa_inadimplencia_real"] = None
+        mask_emitido = df["valor_total_emitido"] > 0
+        df.loc[mask_emitido, "taxa_inadimplencia_real"] = (
+            df.loc[mask_emitido, "valor_inad_real"] / df.loc[mask_emitido, "valor_total_emitido"]
+        )
 
-    if df_ctx.empty:
-        return {
+        # --------------------------
+        # 5) SCORE AJUSTADO
+        # --------------------------
+        def _clamp01(x):
+            try:
+                x = float(x)
+            except Exception:
+                return 0.0
+            if math.isnan(x):
+                return 0.0
+            return max(0.0, min(1.0, x))
+
+        def _calc_score_row(row):
+            inad_real = row.get("taxa_inadimplencia_real")  # sobre o total emitido
+            pago_venc = row.get("taxa_pago_no_vencimento")  # 0–1
+            dias = row.get("tempo_medio_pagamento_dias")
+            parc = row.get("parc_media_parcelas_pond")
+
+            # 1) Risco de inadimplência real (0 → 0%, 1 → 3%+)
+            risk_inad = 0.0
+            if inad_real is not None:
+                risk_inad = _clamp01(inad_real / 0.03)  # 3% vira risco 1
+
+            # 2) Risco de atraso (0 → 100% pago no venc., 1 → 25%+ fora do venc.)
+            risk_atraso = 0.0
+            if pago_venc is not None:
+                risk_atraso = _clamp01((1.0 - float(pago_venc)) / 0.25)
+
+            # 3) Risco de prazo (0 → 5 dias, 1 → 65 dias+)
+            risk_dias = 0.0
+            if dias is not None:
+                risk_dias = _clamp01((float(dias) - 5.0) / 60.0)
+
+            # 4) Risco de parcelamento (0 → 1 parcela, 1 → 12 parcelas+)
+            risk_parc = 0.0
+            if parc is not None:
+                risk_parc = _clamp01((float(parc) - 1.0) / 11.0)
+
+            # Pesos conservadores:
+            # inad 50%, atraso 25%, dias 15%, parcelas 10%
+            score = 1.0 - (
+                0.50 * risk_inad
+                + 0.25 * risk_atraso
+                + 0.15 * risk_dias
+                + 0.10 * risk_parc
+            )
+
+            return max(0.0, min(1.0, score))
+
+        df["score_ajustado"] = df.apply(_calc_score_row, axis=1)
+
+        def _categoria_from_score(s):
+            s = _safe_float(s)
+            if s is None:
+                return None
+            if s >= 0.80:
+                return "A"
+            if s >= 0.60:
+                return "B"
+            if s >= 0.40:
+                return "C"
+            if s >= 0.20:
+                return "D"
+            return "E"
+
+        df["categoria_risco_ajustada"] = df["score_ajustado"].apply(_categoria_from_score)
+
+        # --------------------------
+        # 6) Período global
+        # --------------------------
+        min_dt = df["mes_ref_date"].min()
+        max_dt = df["mes_ref_date"].max()
+
+        limite_inferior_default = max_dt - pd.DateOffset(months=meses - 1)
+
+        # --------------------------
+        # 7) Recorte de tempo
+        # --------------------------
+        if inicio and fim:
+            try:
+                dt_inicio = pd.to_datetime(inicio + "-01")
+                dt_fim = pd.to_datetime(fim + "-01") + pd.offsets.MonthEnd(0)
+                df_recorte = df[
+                    (df["mes_ref_date"] >= dt_inicio)
+                    & (df["mes_ref_date"] <= dt_fim)
+                ].copy()
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Parâmetros inicio/fim inválidos: {e}",
+                )
+        else:
+            df_recorte = df[df["mes_ref_date"] >= limite_inferior_default].copy()
+
+        # --------------------------
+        # 8) Contexto (clínica x geral)
+        # --------------------------
+        if clinica_id:
+            nomes = (
+                df[df["clinica_id"] == clinica_id]["clinica_nome"]
+                .dropna()
+                .unique()
+                .tolist()
+            )
+            nome_clinica = nomes[0] if nomes else "Clínica selecionada"
+        else:
+            nome_clinica = "Todas as clínicas"
+
+        if clinica_id:
+            df_ctx = df_recorte[df_recorte["clinica_id"] == clinica_id].copy()
+        else:
+            df_ctx = df_recorte.copy()
+
+        if df_ctx.empty:
+            return {
+                "filtros": {
+                    "periodo": {
+                        "min_mes_ref": _format_mes_ref(min_dt),
+                        "max_mes_ref": _format_mes_ref(max_dt),
+                    }
+                },
+                "contexto": {
+                    "clinica_id": clinica_id,
+                    "clinica_nome": nome_clinica,
+                },
+                "kpis": {},
+                "series": {},
+                "ranking_clinicas": [],
+            }
+
+        max_ctx_dt = df_ctx["mes_ref_date"].max()
+        df_ctx_ultimo = df_ctx[df_ctx["mes_ref_date"] == max_ctx_dt]
+
+        # helpers
+        def mean_col(col):
+            if col not in df_ctx.columns:
+                return None
+            return _safe_float(df_ctx[col].mean())
+
+        def sum_col(col):
+            if col not in df_ctx.columns:
+                return None
+            return _safe_float(df_ctx[col].sum())
+
+        # --------------------------
+        # 9) KPI principais — agora 100% com base no PERÍODO FILTRADO (df_ctx)
+        # --------------------------
+
+        # Score atual (mês mais recente dentro do período)
+        col_score = "score_ajustado"
+
+        score_atual = (
+            _safe_float(df_ctx_ultimo[col_score].mean())
+            if col_score in df_ctx_ultimo.columns
+            else None
+        )
+
+        # Score mês anterior (dentro do período filtrado)
+        mes_anterior_dt = max_ctx_dt - pd.DateOffset(months=1)
+        df_ctx_m1 = df_ctx[df_ctx["mes_ref_date"] == mes_anterior_dt]
+
+        score_mes_anterior = (
+            _safe_float(df_ctx_m1[col_score].mean())
+            if not df_ctx_m1.empty and col_score in df_ctx_m1.columns
+            else None
+        )
+
+        score_variacao_vs_m1 = None
+        if score_atual is not None and score_mes_anterior is not None:
+            score_variacao_vs_m1 = _safe_float(score_atual - score_mes_anterior)
+
+        # Categoria (apenas mês atual do período)
+        categoria_risco = None
+        col_cat = "categoria_risco_ajustada"
+        if col_cat in df_ctx_ultimo.columns:
+            categorias = df_ctx_ultimo[col_cat].dropna().astype(str).unique().tolist()
+            categoria_risco = categorias[0] if categorias else None
+
+        # Limite aprovado (continua igual)
+        limite_aprovado = (
+            _safe_float(df_ctx_ultimo["limite_aprovado"].mean())
+            if "limite_aprovado" in df_ctx_ultimo.columns
+            else None
+        )
+
+        # VALOR EMITIDO NO PERÍODO FILTRADO (SOMA)
+        valor_total_emitido_periodo = (
+            _safe_float(df_ctx["valor_total_emitido"].sum())
+            if "valor_total_emitido" in df_ctx.columns
+            else None
+        )
+
+        # VALOR EMITIDO DO ÚLTIMO MÊS DO PERÍODO
+        valor_emitido_ultimo_mes = (
+            _safe_float(df_ctx_ultimo["valor_total_emitido"].sum())
+            if "valor_total_emitido" in df_ctx_ultimo.columns
+            else None
+        )
+
+        # INADIMPLÊNCIA REAL NO PERÍODO (média ponderada sobre o período filtrado)
+        inad_media_periodo = None
+        if "valor_total_emitido" in df_ctx.columns and "valor_inad_real" in df_ctx.columns:
+            total_emit = _safe_float(df_ctx["valor_total_emitido"].sum())
+            total_inad = _safe_float(df_ctx["valor_inad_real"].sum())
+
+            if total_emit and total_emit > 0 and total_inad is not None:
+                inad_media_periodo = total_inad / total_emit
+
+        # INADIMPLÊNCIA REAL DO ÚLTIMO MÊS DO PERÍODO
+        inad_ultimo_mes = None
+        if (
+            "valor_total_emitido" in df_ctx_ultimo.columns
+            and "valor_inad_real" in df_ctx_ultimo.columns
+        ):
+            emit_ult = _safe_float(df_ctx_ultimo["valor_total_emitido"].sum())
+            inad_ult = _safe_float(df_ctx_ultimo["valor_inad_real"].sum())
+            if emit_ult and emit_ult > 0 and inad_ult is not None:
+                inad_ultimo_mes = inad_ult / emit_ult
+
+        # TAXA PAGA NO VENCIMENTO — período filtrado
+        pago_venc_media_periodo = (
+            _safe_float(df_ctx["taxa_pago_no_vencimento"].mean())
+            if "taxa_pago_no_vencimento" in df_ctx.columns
+            else None
+        )
+
+        pago_venc_ultimo_mes = (
+            _safe_float(df_ctx_ultimo["taxa_pago_no_vencimento"].mean())
+            if "taxa_pago_no_vencimento" in df_ctx_ultimo.columns
+            else None
+        )
+
+        # TICKET MÉDIO — período filtrado
+        ticket_medio_periodo = (
+            _safe_float(df_ctx["valor_medio_boleto"].mean())
+            if "valor_medio_boleto" in df_ctx.columns
+            else None
+        )
+
+        ticket_medio_ultimo_mes = (
+            _safe_float(df_ctx_ultimo["valor_medio_boleto"].mean())
+            if "valor_medio_boleto" in df_ctx_ultimo.columns
+            else None
+        )
+
+        # TEMPO MÉDIO — período filtrado
+        tempo_medio_periodo = (
+            _safe_float(df_ctx["tempo_medio_pagamento_dias"].mean())
+            if "tempo_medio_pagamento_dias" in df_ctx.columns
+            else None
+        )
+
+        tempo_medio_ultimo_mes = (
+            _safe_float(df_ctx_ultimo["tempo_medio_pagamento_dias"].mean())
+            if "tempo_medio_pagamento_dias" in df_ctx_ultimo.columns
+            else None
+        )
+
+        # PARCELAS MÉDIAS — período filtrado
+        parcelas_media_periodo = (
+            _safe_float(df_ctx["parc_media_parcelas_pond"].mean())
+            if "parc_media_parcelas_pond" in df_ctx.columns
+            else None
+        )
+
+        parcelas_media_ultimo_mes = (
+            _safe_float(df_ctx_ultimo["parc_media_parcelas_pond"].mean())
+            if "parc_media_parcelas_pond" in df_ctx_ultimo.columns
+            else None
+        )
+
+
+        # --------------------------
+        # 10) LIMITE SUGERIDO (conservador)
+        # --------------------------
+        limite_sugerido = None
+        limite_sugerido_base_media12m = None
+        limite_sugerido_base_media3m = None
+        limite_sugerido_base_ultimo_mes = None
+        limite_sugerido_base_mensal_mix = None
+        limite_sugerido_fator = None
+        limite_sugerido_share_portfolio_12m = None
+
+        LIMITE_TETO_GLOBAL = 3_000_000.0  # teto duro por clínica (ajustável)
+
+        if clinica_id:
+            df_clin_all = df[df["clinica_id"] == clinica_id].copy()
+
+            if not df_clin_all.empty:
+                # Buscar histórico de importações
+                import_rows = supabase_get(
+                    "importacoes",
+                    select="clinica_id, criado_em, mes_ref",
+                    extra_params={"clinica_id": f"eq.{clinica_id}"}
+                )
+                df_import = to_df(import_rows)
+
+                # Identificar o último mês realmente fechado
+                ultimo_mes_fechado = identificar_ultimo_mes_fechado(df_import, clinica_id)
+
+                # Se não houver mês fechado, usa o mais recente mesmo
+                if ultimo_mes_fechado is None:
+                    last_dt_clin = df_clin_all["mes_ref_date"].max()
+                else:
+                    last_dt_clin = ultimo_mes_fechado
+
+                # 👇 override opcional pelo parâmetro mes_ref_custom (AAAA-MM)
+                if mes_ref_custom:
+                    try:
+                        last_dt_clin = pd.to_datetime(str(mes_ref_custom) + "-01", errors="raise")
+                    except Exception:
+                        print("⚠️ mes_ref_custom inválido:", mes_ref_custom)
+                        # mantém last_dt_clin original se estiver inválido
+
+
+                # 10.1 Janela 12M da clínica
+                dt_inicio_12m_clin = last_dt_clin - pd.DateOffset(months=11)
+                df_clin_12m = df_clin_all[
+                    df_clin_all["mes_ref_date"] >= dt_inicio_12m_clin
+                ].copy()
+                if df_clin_12m.empty:
+                    df_clin_12m = df_clin_all.copy()
+
+                total_emit_12m_clin = _safe_float(df_clin_12m["valor_total_emitido"].sum())
+                n_meses_12m_clin = int(df_clin_12m["mes_ref_date"].nunique() or 0)
+
+                if n_meses_12m_clin > 0 and total_emit_12m_clin is not None:
+                    limite_sugerido_base_media12m = total_emit_12m_clin / n_meses_12m_clin
+
+                # 10.2 Janela 3M da clínica
+                dt_inicio_3m = last_dt_clin - pd.DateOffset(months=2)
+                df_last3 = df_clin_all[
+                    (df_clin_all["mes_ref_date"] >= dt_inicio_3m)
+                    & (df_clin_all["mes_ref_date"] <= last_dt_clin)
+                ].copy()
+                if not df_last3.empty:
+                    limite_sugerido_base_media3m = _safe_float(
+                        df_last3["valor_total_emitido"].mean()
+                    )
+
+                # 10.3 Último mês da clínica
+                df_ultimo_mes_clin = df_clin_all[
+                    df_clin_all["mes_ref_date"] == last_dt_clin
+                ].copy()
+                if not df_ultimo_mes_clin.empty:
+                    limite_sugerido_base_ultimo_mes = _safe_float(
+                        df_ultimo_mes_clin["valor_total_emitido"].sum()
+                    )
+
+                # 10.4 Base mensal combinada (12M, 3M, último mês)
+                componentes = []
+                pesos = []
+
+                if limite_sugerido_base_media12m is not None:
+                    componentes.append(limite_sugerido_base_media12m)
+                    pesos.append(0.50)
+                if limite_sugerido_base_media3m is not None:
+                    componentes.append(limite_sugerido_base_media3m)
+                    pesos.append(0.30)
+                if limite_sugerido_base_ultimo_mes is not None:
+                    componentes.append(limite_sugerido_base_ultimo_mes)
+                    pesos.append(0.20)
+
+                if componentes and sum(pesos) > 0:
+                    limite_sugerido_base_mensal_mix = sum(
+                        c * p for c, p in zip(componentes, pesos)
+                    ) / sum(pesos)
+                else:
+                    limite_sugerido_base_mensal_mix = None
+
+                # 10.5 Share da clínica na carteira (12M)
+                dt_inicio_12m_share = last_dt_clin - pd.DateOffset(months=11)
+                df_port_12m = df[df["mes_ref_date"] >= dt_inicio_12m_share].copy()
+                if not df_port_12m.empty and total_emit_12m_clin is not None:
+                    total_emit_portfolio_12m = _safe_float(
+                        df_port_12m["valor_total_emitido"].sum()
+                    )
+                    if total_emit_portfolio_12m and total_emit_portfolio_12m > 0:
+                        limite_sugerido_share_portfolio_12m = _safe_float(
+                            total_emit_12m_clin / total_emit_portfolio_12m
+                        )
+
+                # 🔥 Usa o score do último mês da CLÍNICA, não do período filtrado
+                score_para_limite = _safe_float(df_ultimo_mes_clin["score_ajustado"].mean())
+                limite_sugerido_fator = _fator_limite_score(score_para_limite)
+
+                base_para_limite = limite_sugerido_base_mensal_mix or 0.0
+                bruto = base_para_limite * (limite_sugerido_fator or 0.0)
+
+                if bruto and bruto > 0:
+                    # Nova trava de segurança: 150% do MAIOR faturamento base (1M, 3M, 12M)
+                    bases_validas = [
+                        b for b in [
+                            limite_sugerido_base_media12m,
+                            limite_sugerido_base_media3m,
+                            limite_sugerido_base_ultimo_mes
+                        ] if b is not None and b > 0
+                    ]
+                    maior_base = max(bases_validas) if bases_validas else 0
+                    teto_dinamico = 1.5 * maior_base
+
+                    limite_sugerido = min(bruto, teto_dinamico, LIMITE_TETO_GLOBAL)
+                else:
+                    limite_sugerido = None
+
+        # --------------------------
+        # 11) Séries temporais
+        # --------------------------
+        grp = df_ctx.groupby("mes_ref_date", as_index=False).agg(
+            {
+                "score_ajustado": "mean",
+                "valor_total_emitido": "sum",
+                "valor_inad_real": "sum",
+                "taxa_pago_no_vencimento": "mean",
+                "tempo_medio_pagamento_dias": "mean",
+                "parc_media_parcelas_pond": "mean",
+            }
+        )
+
+        grp = grp.sort_values("mes_ref_date")
+
+        series_score = []
+        series_valor = []
+        series_inad = []
+        series_pago_venc = []
+        series_tempo = []
+        series_parc = []
+
+        for _, row in grp.iterrows():
+            mes_str = _format_mes_ref(row["mes_ref_date"])
+
+            score_val = _safe_float(row.get("score_ajustado"))
+            valor_emitido = _safe_float(row.get("valor_total_emitido"))
+            inad_valor = _safe_float(row.get("valor_inad_real"))
+            pago_venc_val = _safe_float(row.get("taxa_pago_no_vencimento"))
+            tempo_val = _safe_float(row.get("tempo_medio_pagamento_dias"))
+            parc_val = _safe_float(row.get("parc_media_parcelas_pond"))
+
+            taxa_inad_mes = None
+            if valor_emitido and valor_emitido > 0 and inad_valor is not None:
+                taxa_inad_mes = _safe_float(inad_valor / valor_emitido)
+
+            series_score.append(
+                {
+                    "mes_ref": mes_str,
+                    "score_credito": score_val,
+                }
+            )
+            series_valor.append(
+                {
+                    "clinica_id": row.get("clinica_id"),
+                    "mes_ref": mes_str,
+                    "valor_total_emitido": valor_emitido,
+                    "valor_medio_boleto": row.get("valor_medio_boleto"),
+                    "qtde_boletos": row.get("qtde_boletos"),  # se existir na view
+                }
+            )
+
+            series_inad.append(
+                {
+                    "mes_ref": mes_str,
+                    "taxa_inadimplencia": taxa_inad_mes,
+                }
+            )
+            series_pago_venc.append(
+                {
+                    "mes_ref": mes_str,
+                    "taxa_pago_no_vencimento": pago_venc_val,
+                }
+            )
+            series_tempo.append(
+                {
+                    "mes_ref": mes_str,
+                    "tempo_medio_pagamento_dias": tempo_val,
+                }
+            )
+            series_parc.append(
+                {
+                    "mes_ref": mes_str,
+                    "media_parcelas_pond": parc_val,
+                }
+            )
+
+        # --------------------------
+        # 12) Ranking de clínicas (último mês fechado global)
+        # --------------------------
+        df_ultimo_global = df[df["mes_ref_date"] == max_dt].copy()
+
+        ranking = []
+        if not df_ultimo_global.empty:
+            # Usa o recorte de tempo do filtro para os dados da carteira
+            agg_periodo_por_clinica = (
+                df_recorte.groupby("clinica_id", as_index=False).agg(
+                    {
+                        "valor_total_emitido": "sum",
+                        "valor_inad_real": "sum",
+                    }
+                )
+            )
+
+            def _calc_inad_med(row):
+                emit = _safe_float(row.get("valor_total_emitido"))
+                inad = _safe_float(row.get("valor_inad_real"))
+                if emit and emit > 0 and inad is not None:
+                    return _safe_float(inad / emit)
+                return None
+
+            agg_periodo_por_clinica["inadimplencia_media_periodo"] = agg_periodo_por_clinica.apply(
+                _calc_inad_med, axis=1
+            )
+
+            agg_periodo_por_clinica = agg_periodo_por_clinica.rename(
+                columns={
+                    "valor_total_emitido": "valor_total_emitido_periodo",
+                }
+            )
+
+            df_rank = df_ultimo_global.merge(
+                agg_periodo_por_clinica, on="clinica_id", how="left"
+            )
+
+            for _, row in df_rank.iterrows():
+                current_clinica_id = _safe_str(row.get("clinica_id"))
+                
+                # --- Cálculo do Limite Sugerido para esta clínica ---
+                limite_sugerido_para_clinica = None
+                df_clin_all = df[df["clinica_id"] == current_clinica_id].copy()
+                if not df_clin_all.empty:
+                    last_dt_clin = df_clin_all["mes_ref_date"].max()
+
+                    # Bases de faturamento (12M, 3M, 1M)
+                    dt_inicio_12m_clin = last_dt_clin - pd.DateOffset(months=11)
+                    df_clin_12m = df_clin_all[df_clin_all["mes_ref_date"] >= dt_inicio_12m_clin].copy()
+                    total_emit_12m_clin = _safe_float(df_clin_12m["valor_total_emitido"].sum())
+                    n_meses_12m_clin = int(df_clin_12m["mes_ref_date"].nunique() or 0)
+                    base_media12m = total_emit_12m_clin / n_meses_12m_clin if n_meses_12m_clin > 0 and total_emit_12m_clin is not None else None
+
+                    dt_inicio_3m = last_dt_clin - pd.DateOffset(months=2)
+                    df_last3 = df_clin_all[(df_clin_all["mes_ref_date"] >= dt_inicio_3m) & (df_clin_all["mes_ref_date"] <= last_dt_clin)].copy()
+                    base_media3m = _safe_float(df_last3["valor_total_emitido"].mean()) if not df_last3.empty else None
+
+                    df_ultimo_mes_clin = df_clin_all[df_clin_all["mes_ref_date"] == last_dt_clin].copy()
+                    base_ultimo_mes = _safe_float(df_ultimo_mes_clin["valor_total_emitido"].sum()) if not df_ultimo_mes_clin.empty else None
+
+                    componentes = []
+                    pesos = []
+                    if base_media12m is not None: componentes.append(base_media12m); pesos.append(0.50)
+                    if base_media3m is not None: componentes.append(base_media3m); pesos.append(0.30)
+                    if base_ultimo_mes is not None: componentes.append(base_ultimo_mes); pesos.append(0.20)
+                    base_mensal_mix = sum(c * p for c, p in zip(componentes, pesos)) / sum(pesos) if componentes and sum(pesos) > 0 else None
+
+                    score_para_limite = _safe_float(df_ultimo_mes_clin["score_ajustado"].mean())
+                    fator = _fator_limite_score(score_para_limite)
+
+                    base_para_limite = base_mensal_mix or 0.0
+                    bruto = base_para_limite * (fator or 0.0)
+
+                    if bruto and bruto > 0:
+                        bases_validas = [b for b in [base_media12m, base_media3m, base_ultimo_mes] if b is not None and b > 0]
+                        maior_base = max(bases_validas) if bases_validas else 0
+                        teto_dinamico = 1.5 * maior_base
+                        limite_sugerido_para_clinica = min(bruto, teto_dinamico, LIMITE_TETO_GLOBAL)
+                # --- Fim do cálculo ---
+
+                ranking.append({
+                    "clinica_id": current_clinica_id,
+                    "clinica_nome": _safe_str(row.get("clinica_nome")),
+                    "cnpj": _safe_str(row.get("cnpj")),
+                    "score_credito": _safe_float(row.get("score_ajustado")),
+                    "categoria_risco": _safe_str(row.get("categoria_risco_ajustada")),
+                    "limite_aprovado": _safe_float(row.get("limite_aprovado")),
+                    "limite_sugerido": limite_sugerido_para_clinica,
+                    "valor_total_emitido_periodo": _safe_float(row.get("valor_total_emitido_periodo")),
+                    "inadimplencia_media_periodo": _safe_float(row.get("inadimplencia_media_periodo")),
+
+                    # ⭐ ADICIONE ESTA LINHA AQUI ⭐
+                    "ticket_medio_periodo": _safe_float(row.get("valor_medio_boleto")), 
+                })
+
+
+            ranking = sorted(
+                ranking,
+                key=lambda x: (x["score_credito"] or 0),
+                reverse=True,
+            )
+
+        # --------------------------
+        # 13) Montar resposta
+        # --------------------------
+        response_data = {
             "filtros": {
                 "periodo": {
                     "min_mes_ref": _format_mes_ref(min_dt),
                     "max_mes_ref": _format_mes_ref(max_dt),
+                    "todos_meses": sorted(
+                        {_format_mes_ref(m) for m in df["mes_ref_date"].unique() if m is not None}
+                    )
                 }
             },
             "contexto": {
                 "clinica_id": clinica_id,
                 "clinica_nome": nome_clinica,
             },
-            "kpis": {},
-            "series": {},
-            "ranking_clinicas": [],
+            "kpis": {
+                "score_atual": score_atual,
+                "score_mes_anterior": score_mes_anterior,
+                "score_variacao_vs_m1": score_variacao_vs_m1,
+                "categoria_risco": categoria_risco,
+
+                # Limite aprovado continua igual
+                "limite_aprovado": limite_aprovado,
+
+                # KPIs do período filtrado
+                "valor_total_emitido_periodo": valor_total_emitido_periodo,
+                "valor_emitido_ultimo_mes": valor_emitido_ultimo_mes,
+
+                "inadimplencia_media_periodo": inad_media_periodo,
+                "inadimplencia_ultimo_mes": inad_ultimo_mes,
+
+                "taxa_pago_no_vencimento_media_periodo": pago_venc_media_periodo,
+                "taxa_pago_no_vencimento_ultimo_mes": pago_venc_ultimo_mes,
+
+                "ticket_medio_periodo": ticket_medio_periodo,
+                "ticket_medio_ultimo_mes": ticket_medio_ultimo_mes,
+
+                "tempo_medio_pagamento_media_periodo": tempo_medio_periodo,
+                "tempo_medio_pagamento_ultimo_mes": tempo_medio_ultimo_mes,
+
+                "parcelas_media_periodo": parcelas_media_periodo,
+                "parcelas_media_ultimo_mes": parcelas_media_ultimo_mes,
+
+                # limite sugerido (mantido, não depende do filtro)
+                "limite_sugerido": limite_sugerido,
+                "limite_sugerido_base_media12m": limite_sugerido_base_media12m,
+                "limite_sugerido_base_media3m": limite_sugerido_base_media3m,
+                "limite_sugerido_base_ultimo_mes": limite_sugerido_base_ultimo_mes,
+                "limite_sugerido_base_mensal_mix": limite_sugerido_base_mensal_mix,
+                "limite_sugerido_fator": limite_sugerido_fator,
+                "limite_sugerido_teto_global": LIMITE_TETO_GLOBAL,
+                "limite_sugerido_share_portfolio_12m": limite_sugerido_share_portfolio_12m,
+            },
+            "series": {
+                "score_por_mes": series_score,
+                "valor_emitido_por_mes": series_valor,
+                "inadimplencia_por_mes": series_inad,
+                "taxa_pago_no_vencimento_por_mes": series_pago_venc,
+                "tempo_medio_pagamento_por_mes": series_tempo,
+                "parcelas_media_por_mes": series_parc,
+            },
+            "ranking_clinicas": ranking,
         }
-
-    max_ctx_dt = df_ctx["mes_ref_date"].max()
-    df_ctx_ultimo = df_ctx[df_ctx["mes_ref_date"] == max_ctx_dt]
-
-    # helpers
-    def mean_col(col):
-        if col not in df_ctx.columns:
-            return None
-        return _safe_float(df_ctx[col].mean())
-
-    def sum_col(col):
-        if col not in df_ctx.columns:
-            return None
-        return _safe_float(df_ctx[col].sum())
-
-# --------------------------
-# 9) KPI principais — agora 100% com base no PERÍODO FILTRADO (df_ctx)
-# --------------------------
-
-# Score atual (mês mais recente dentro do período)
-    col_score = "score_ajustado"
-
-    score_atual = (
-        _safe_float(df_ctx_ultimo[col_score].mean())
-        if col_score in df_ctx_ultimo.columns
-        else None
-    )
-
-    # Score mês anterior (dentro do período filtrado)
-    mes_anterior_dt = max_ctx_dt - pd.DateOffset(months=1)
-    df_ctx_m1 = df_ctx[df_ctx["mes_ref_date"] == mes_anterior_dt]
-
-    score_mes_anterior = (
-        _safe_float(df_ctx_m1[col_score].mean())
-        if not df_ctx_m1.empty and col_score in df_ctx_m1.columns
-        else None
-    )
-
-    score_variacao_vs_m1 = None
-    if score_atual is not None and score_mes_anterior is not None:
-        score_variacao_vs_m1 = _safe_float(score_atual - score_mes_anterior)
-
-    # Categoria (apenas mês atual do período)
-    categoria_risco = None
-    col_cat = "categoria_risco_ajustada"
-    if col_cat in df_ctx_ultimo.columns:
-        categorias = df_ctx_ultimo[col_cat].dropna().astype(str).unique().tolist()
-        categoria_risco = categorias[0] if categorias else None
-
-    # Limite aprovado (continua igual)
-    limite_aprovado = (
-        _safe_float(df_ctx_ultimo["limite_aprovado"].mean())
-        if "limite_aprovado" in df_ctx_ultimo.columns
-        else None
-    )
-
-    # VALOR EMITIDO NO PERÍODO FILTRADO (SOMA)
-    valor_total_emitido_periodo = (
-        _safe_float(df_ctx["valor_total_emitido"].sum())
-        if "valor_total_emitido" in df_ctx.columns
-        else None
-    )
-
-    # VALOR EMITIDO DO ÚLTIMO MÊS DO PERÍODO
-    valor_emitido_ultimo_mes = (
-        _safe_float(df_ctx_ultimo["valor_total_emitido"].sum())
-        if "valor_total_emitido" in df_ctx_ultimo.columns
-        else None
-    )
-
-    # INADIMPLÊNCIA REAL NO PERÍODO (média ponderada sobre o período filtrado)
-    inad_media_periodo = None
-    if "valor_total_emitido" in df_ctx.columns and "valor_inad_real" in df_ctx.columns:
-        total_emit = _safe_float(df_ctx["valor_total_emitido"].sum())
-        total_inad = _safe_float(df_ctx["valor_inad_real"].sum())
-
-        if total_emit and total_emit > 0 and total_inad is not None:
-            inad_media_periodo = total_inad / total_emit
-
-    # INADIMPLÊNCIA REAL DO ÚLTIMO MÊS DO PERÍODO
-    inad_ultimo_mes = None
-    if (
-        "valor_total_emitido" in df_ctx_ultimo.columns
-        and "valor_inad_real" in df_ctx_ultimo.columns
-    ):
-        emit_ult = _safe_float(df_ctx_ultimo["valor_total_emitido"].sum())
-        inad_ult = _safe_float(df_ctx_ultimo["valor_inad_real"].sum())
-        if emit_ult and emit_ult > 0 and inad_ult is not None:
-            inad_ultimo_mes = inad_ult / emit_ult
-
-    # TAXA PAGA NO VENCIMENTO — período filtrado
-    pago_venc_media_periodo = (
-        _safe_float(df_ctx["taxa_pago_no_vencimento"].mean())
-        if "taxa_pago_no_vencimento" in df_ctx.columns
-        else None
-    )
-
-    pago_venc_ultimo_mes = (
-        _safe_float(df_ctx_ultimo["taxa_pago_no_vencimento"].mean())
-        if "taxa_pago_no_vencimento" in df_ctx_ultimo.columns
-        else None
-    )
-
-    # TICKET MÉDIO — período filtrado
-    ticket_medio_periodo = (
-        _safe_float(df_ctx["valor_medio_boleto"].mean())
-        if "valor_medio_boleto" in df_ctx.columns
-        else None
-    )
-
-    ticket_medio_ultimo_mes = (
-        _safe_float(df_ctx_ultimo["valor_medio_boleto"].mean())
-        if "valor_medio_boleto" in df_ctx_ultimo.columns
-        else None
-    )
-
-    # TEMPO MÉDIO — período filtrado
-    tempo_medio_periodo = (
-        _safe_float(df_ctx["tempo_medio_pagamento_dias"].mean())
-        if "tempo_medio_pagamento_dias" in df_ctx.columns
-        else None
-    )
-
-    tempo_medio_ultimo_mes = (
-        _safe_float(df_ctx_ultimo["tempo_medio_pagamento_dias"].mean())
-        if "tempo_medio_pagamento_dias" in df_ctx_ultimo.columns
-        else None
-    )
-
-    # PARCELAS MÉDIAS — período filtrado
-    parcelas_media_periodo = (
-        _safe_float(df_ctx["parc_media_parcelas_pond"].mean())
-        if "parc_media_parcelas_pond" in df_ctx.columns
-        else None
-    )
-
-    parcelas_media_ultimo_mes = (
-        _safe_float(df_ctx_ultimo["parc_media_parcelas_pond"].mean())
-        if "parc_media_parcelas_pond" in df_ctx_ultimo.columns
-        else None
-    )
-
-
-    # --------------------------
-    # 10) LIMITE SUGERIDO (conservador)
-    # --------------------------
-    limite_sugerido = None
-    limite_sugerido_base_media12m = None
-    limite_sugerido_base_media3m = None
-    limite_sugerido_base_ultimo_mes = None
-    limite_sugerido_base_mensal_mix = None
-    limite_sugerido_fator = None
-    limite_sugerido_share_portfolio_12m = None
-
-    LIMITE_TETO_GLOBAL = 3_000_000.0  # teto duro por clínica (ajustável)
-
-    if clinica_id:
-        df_clin_all = df[df["clinica_id"] == clinica_id].copy()
-
-        # Buscar histórico de importações
-        import_rows = supabase_get(
-            "importacoes",
-            select="clinica_id, criado_em, mes_ref",
-            extra_params={"clinica_id": f"eq.{clinica_id}"}
+        return jsonable_encoder(response_data)
+    except Exception as e:
+        import traceback
+        print(f"!!! Erro Inesperado no Endpoint /dashboard para clinica_id={clinica_id} !!!")
+        print(f"Erro: {e}")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ocorreu um erro inesperado ao processar os dados do dashboard: {e}",
         )
-        df_import = to_df(import_rows)
-
-        # Identificar o último mês realmente fechado
-        ultimo_mes_fechado = identificar_ultimo_mes_fechado(df_import, clinica_id)
-
-        # Se não houver mês fechado, usa o mais recente mesmo
-        if ultimo_mes_fechado is None:
-            last_dt_clin = df_clin_all["mes_ref_date"].max()
-        else:
-            last_dt_clin = ultimo_mes_fechado
-
-        # 👇 override opcional pelo parâmetro mes_ref_custom (AAAA-MM)
-        if mes_ref_custom:
-            try:
-                last_dt_clin = pd.to_datetime(str(mes_ref_custom) + "-01", errors="raise")
-            except Exception:
-                print("⚠️ mes_ref_custom inválido:", mes_ref_custom)
-                # mantém last_dt_clin original se estiver inválido
-
-
-        # 10.1 Janela 12M da clínica
-        dt_inicio_12m_clin = last_dt_clin - pd.DateOffset(months=11)
-        df_clin_12m = df_clin_all[
-            df_clin_all["mes_ref_date"] >= dt_inicio_12m_clin
-        ].copy()
-        if df_clin_12m.empty:
-            df_clin_12m = df_clin_all.copy()
-
-        total_emit_12m_clin = _safe_float(df_clin_12m["valor_total_emitido"].sum())
-        n_meses_12m_clin = int(df_clin_12m["mes_ref_date"].nunique() or 0)
-
-        if n_meses_12m_clin > 0 and total_emit_12m_clin is not None:
-            limite_sugerido_base_media12m = total_emit_12m_clin / n_meses_12m_clin
-
-        # 10.2 Janela 3M da clínica
-        dt_inicio_3m = last_dt_clin - pd.DateOffset(months=2)
-        df_last3 = df_clin_all[
-            (df_clin_all["mes_ref_date"] >= dt_inicio_3m)
-            & (df_clin_all["mes_ref_date"] <= last_dt_clin)
-        ].copy()
-        if not df_last3.empty:
-            limite_sugerido_base_media3m = _safe_float(
-                df_last3["valor_total_emitido"].mean()
-            )
-
-        # 10.3 Último mês da clínica
-        df_ultimo_mes_clin = df_clin_all[
-            df_clin_all["mes_ref_date"] == last_dt_clin
-        ].copy()
-        if not df_ultimo_mes_clin.empty:
-            limite_sugerido_base_ultimo_mes = _safe_float(
-                df_ultimo_mes_clin["valor_total_emitido"].sum()
-            )
-
-        # 10.4 Base mensal combinada (12M, 3M, último mês)
-        componentes = []
-        pesos = []
-
-        if limite_sugerido_base_media12m is not None:
-            componentes.append(limite_sugerido_base_media12m)
-            pesos.append(0.50)
-        if limite_sugerido_base_media3m is not None:
-            componentes.append(limite_sugerido_base_media3m)
-            pesos.append(0.30)
-        if limite_sugerido_base_ultimo_mes is not None:
-            componentes.append(limite_sugerido_base_ultimo_mes)
-            pesos.append(0.20)
-
-        if componentes and sum(pesos) > 0:
-            limite_sugerido_base_mensal_mix = sum(
-                c * p for c, p in zip(componentes, pesos)
-            ) / sum(pesos)
-        else:
-            limite_sugerido_base_mensal_mix = None
-
-        # 10.5 Share da clínica na carteira (12M)
-        dt_inicio_12m_share = last_dt_clin - pd.DateOffset(months=11)
-        df_port_12m = df[df["mes_ref_date"] >= dt_inicio_12m_share].copy()
-        if not df_port_12m.empty and total_emit_12m_clin is not None:
-            total_emit_portfolio_12m = _safe_float(
-                df_port_12m["valor_total_emitido"].sum()
-            )
-            if total_emit_portfolio_12m and total_emit_portfolio_12m > 0:
-                limite_sugerido_share_portfolio_12m = _safe_float(
-                    total_emit_12m_clin / total_emit_portfolio_12m
-                )
-
-        # 🔥 Usa o score do último mês da CLÍNICA, não do período filtrado
-        score_para_limite = _safe_float(df_ultimo_mes_clin["score_ajustado"].mean())
-        limite_sugerido_fator = _fator_limite_score(score_para_limite)
-
-        base_para_limite = limite_sugerido_base_mensal_mix or 0.0
-        bruto = base_para_limite * (limite_sugerido_fator or 0.0)
-
-        if bruto and bruto > 0:
-            # Nova trava de segurança: 150% do MAIOR faturamento base (1M, 3M, 12M)
-            bases_validas = [
-                b for b in [
-                    limite_sugerido_base_media12m,
-                    limite_sugerido_base_media3m,
-                    limite_sugerido_base_ultimo_mes
-                ] if b is not None and b > 0
-            ]
-            maior_base = max(bases_validas) if bases_validas else 0
-            teto_dinamico = 1.5 * maior_base
-
-            limite_sugerido = min(bruto, teto_dinamico, LIMITE_TETO_GLOBAL)
-        else:
-            limite_sugerido = None
-
-
-    # --------------------------
-    # 11) Séries temporais
-    # --------------------------
-    grp = df_ctx.groupby("mes_ref_date", as_index=False).agg(
-        {
-            "score_ajustado": "mean",
-            "valor_total_emitido": "sum",
-            "valor_inad_real": "sum",
-            "taxa_pago_no_vencimento": "mean",
-            "tempo_medio_pagamento_dias": "mean",
-            "parc_media_parcelas_pond": "mean",
-        }
-    )
-
-    grp = grp.sort_values("mes_ref_date")
-
-    series_score = []
-    series_valor = []
-    series_inad = []
-    series_pago_venc = []
-    series_tempo = []
-    series_parc = []
-
-    for _, row in grp.iterrows():
-        mes_str = _format_mes_ref(row["mes_ref_date"])
-
-        score_val = _safe_float(row.get("score_ajustado"))
-        valor_emitido = _safe_float(row.get("valor_total_emitido"))
-        inad_valor = _safe_float(row.get("valor_inad_real"))
-        pago_venc_val = _safe_float(row.get("taxa_pago_no_vencimento"))
-        tempo_val = _safe_float(row.get("tempo_medio_pagamento_dias"))
-        parc_val = _safe_float(row.get("parc_media_parcelas_pond"))
-
-        taxa_inad_mes = None
-        if valor_emitido and valor_emitido > 0 and inad_valor is not None:
-            taxa_inad_mes = _safe_float(inad_valor / valor_emitido)
-
-        series_score.append(
-            {
-                "mes_ref": mes_str,
-                "score_credito": score_val,
-            }
-        )
-        series_valor.append(
-            {
-                "clinica_id": row.get("clinica_id"),
-                "mes_ref": mes_str,
-                "valor_total_emitido": valor_emitido,
-                "valor_medio_boleto": row.get("valor_medio_boleto"),
-                "qtde_boletos": row.get("qtde_boletos"),  # se existir na view
-            }
-        )
-
-        series_inad.append(
-            {
-                "mes_ref": mes_str,
-                "taxa_inadimplencia": taxa_inad_mes,
-            }
-        )
-        series_pago_venc.append(
-            {
-                "mes_ref": mes_str,
-                "taxa_pago_no_vencimento": pago_venc_val,
-            }
-        )
-        series_tempo.append(
-            {
-                "mes_ref": mes_str,
-                "tempo_medio_pagamento_dias": tempo_val,
-            }
-        )
-        series_parc.append(
-            {
-                "mes_ref": mes_str,
-                "media_parcelas_pond": parc_val,
-            }
-        )
-
-    # --------------------------
-    # 12) Ranking de clínicas (último mês fechado global)
-    # --------------------------
-    df_ultimo_global = df[df["mes_ref_date"] == max_dt].copy()
-
-    ranking = []
-    if not df_ultimo_global.empty:
-        # Usa o recorte de tempo do filtro para os dados da carteira
-        agg_periodo_por_clinica = (
-            df_recorte.groupby("clinica_id", as_index=False).agg(
-                {
-                    "valor_total_emitido": "sum",
-                    "valor_inad_real": "sum",
-                }
-            )
-        )
-
-        def _calc_inad_med(row):
-            emit = _safe_float(row.get("valor_total_emitido"))
-            inad = _safe_float(row.get("valor_inad_real"))
-            if emit and emit > 0 and inad is not None:
-                return _safe_float(inad / emit)
-            return None
-
-        agg_periodo_por_clinica["inadimplencia_media_periodo"] = agg_periodo_por_clinica.apply(
-            _calc_inad_med, axis=1
-        )
-
-        agg_periodo_por_clinica = agg_periodo_por_clinica.rename(
-            columns={
-                "valor_total_emitido": "valor_total_emitido_periodo",
-            }
-        )
-
-        df_rank = df_ultimo_global.merge(
-            agg_periodo_por_clinica, on="clinica_id", how="left"
-        )
-
-        for _, row in df_rank.iterrows():
-            current_clinica_id = _safe_str(row.get("clinica_id"))
-            
-            # --- Cálculo do Limite Sugerido para esta clínica ---
-            limite_sugerido_para_clinica = None
-            df_clin_all = df[df["clinica_id"] == current_clinica_id].copy()
-            if not df_clin_all.empty:
-                last_dt_clin = df_clin_all["mes_ref_date"].max()
-
-                # Bases de faturamento (12M, 3M, 1M)
-                dt_inicio_12m_clin = last_dt_clin - pd.DateOffset(months=11)
-                df_clin_12m = df_clin_all[df_clin_all["mes_ref_date"] >= dt_inicio_12m_clin].copy()
-                total_emit_12m_clin = _safe_float(df_clin_12m["valor_total_emitido"].sum())
-                n_meses_12m_clin = int(df_clin_12m["mes_ref_date"].nunique() or 0)
-                base_media12m = total_emit_12m_clin / n_meses_12m_clin if n_meses_12m_clin > 0 and total_emit_12m_clin is not None else None
-
-                dt_inicio_3m = last_dt_clin - pd.DateOffset(months=2)
-                df_last3 = df_clin_all[(df_clin_all["mes_ref_date"] >= dt_inicio_3m) & (df_clin_all["mes_ref_date"] <= last_dt_clin)].copy()
-                base_media3m = _safe_float(df_last3["valor_total_emitido"].mean()) if not df_last3.empty else None
-
-                df_ultimo_mes_clin = df_clin_all[df_clin_all["mes_ref_date"] == last_dt_clin].copy()
-                base_ultimo_mes = _safe_float(df_ultimo_mes_clin["valor_total_emitido"].sum()) if not df_ultimo_mes_clin.empty else None
-
-                componentes = []
-                pesos = []
-                if base_media12m is not None: componentes.append(base_media12m); pesos.append(0.50)
-                if base_media3m is not None: componentes.append(base_media3m); pesos.append(0.30)
-                if base_ultimo_mes is not None: componentes.append(base_ultimo_mes); pesos.append(0.20)
-                base_mensal_mix = sum(c * p for c, p in zip(componentes, pesos)) / sum(pesos) if componentes and sum(pesos) > 0 else None
-
-                score_para_limite = _safe_float(df_ultimo_mes_clin["score_ajustado"].mean())
-                fator = _fator_limite_score(score_para_limite)
-
-                base_para_limite = base_mensal_mix or 0.0
-                bruto = base_para_limite * (fator or 0.0)
-
-                if bruto and bruto > 0:
-                    bases_validas = [b for b in [base_media12m, base_media3m, base_ultimo_mes] if b is not None and b > 0]
-                    maior_base = max(bases_validas) if bases_validas else 0
-                    teto_dinamico = 1.5 * maior_base
-                    limite_sugerido_para_clinica = min(bruto, teto_dinamico, LIMITE_TETO_GLOBAL)
-            # --- Fim do cálculo ---
-
-            ranking.append({
-                "clinica_id": current_clinica_id,
-                "clinica_nome": _safe_str(row.get("clinica_nome")),
-                "cnpj": _safe_str(row.get("cnpj")),
-                "score_credito": _safe_float(row.get("score_ajustado")),
-                "categoria_risco": _safe_str(row.get("categoria_risco_ajustada")),
-                "limite_aprovado": _safe_float(row.get("limite_aprovado")),
-                "limite_sugerido": limite_sugerido_para_clinica,
-                "valor_total_emitido_periodo": _safe_float(row.get("valor_total_emitido_periodo")),
-                "inadimplencia_media_periodo": _safe_float(row.get("inadimplencia_media_periodo")),
-
-                # ⭐ ADICIONE ESTA LINHA AQUI ⭐
-                "ticket_medio_periodo": _safe_float(row.get("valor_medio_boleto")), 
-            })
-
-
-        ranking = sorted(
-            ranking,
-            key=lambda x: (x["score_credito"] or 0),
-            reverse=True,
-        )
-
-    # --------------------------
-    # 13) Montar resposta
-    # --------------------------
-    response_data = {
-        "filtros": {
-            "periodo": {
-                "min_mes_ref": _format_mes_ref(min_dt),
-                "max_mes_ref": _format_mes_ref(max_dt),
-                "todos_meses": sorted(
-                    {_format_mes_ref(m) for m in df["mes_ref_date"].unique() if m is not None}
-                )
-            }
-        },
-        "contexto": {
-            "clinica_id": clinica_id,
-            "clinica_nome": nome_clinica,
-        },
-        "kpis": {
-            "score_atual": score_atual,
-            "score_mes_anterior": score_mes_anterior,
-            "score_variacao_vs_m1": score_variacao_vs_m1,
-            "categoria_risco": categoria_risco,
-
-            # Limite aprovado continua igual
-            "limite_aprovado": limite_aprovado,
-
-            # KPIs do período filtrado
-            "valor_total_emitido_periodo": valor_total_emitido_periodo,
-            "valor_emitido_ultimo_mes": valor_emitido_ultimo_mes,
-
-            "inadimplencia_media_periodo": inad_media_periodo,
-            "inadimplencia_ultimo_mes": inad_ultimo_mes,
-
-            "taxa_pago_no_vencimento_media_periodo": pago_venc_media_periodo,
-            "taxa_pago_no_vencimento_ultimo_mes": pago_venc_ultimo_mes,
-
-            "ticket_medio_periodo": ticket_medio_periodo,
-            "ticket_medio_ultimo_mes": ticket_medio_ultimo_mes,
-
-            "tempo_medio_pagamento_media_periodo": tempo_medio_periodo,
-            "tempo_medio_pagamento_ultimo_mes": tempo_medio_ultimo_mes,
-
-            "parcelas_media_periodo": parcelas_media_periodo,
-            "parcelas_media_ultimo_mes": parcelas_media_ultimo_mes,
-
-            # limite sugerido (mantido, não depende do filtro)
-            "limite_sugerido": limite_sugerido,
-            "limite_sugerido_base_media12m": limite_sugerido_base_media12m,
-            "limite_sugerido_base_media3m": limite_sugerido_base_media3m,
-            "limite_sugerido_base_ultimo_mes": limite_sugerido_base_ultimo_mes,
-            "limite_sugerido_base_mensal_mix": limite_sugerido_base_mensal_mix,
-            "limite_sugerido_fator": limite_sugerido_fator,
-            "limite_sugerido_teto_global": LIMITE_TETO_GLOBAL,
-            "limite_sugerido_share_portfolio_12m": limite_sugerido_share_portfolio_12m,
-        },
-        "series": {
-            "score_por_mes": series_score,
-            "valor_emitido_por_mes": series_valor,
-            "inadimplencia_por_mes": series_inad,
-            "taxa_pago_no_vencimento_por_mes": series_pago_venc,
-            "tempo_medio_pagamento_por_mes": series_tempo,
-            "parcelas_media_por_mes": series_parc,
-        },
-        "ranking_clinicas": ranking,
-    }
-    return jsonable_encoder(response_data)
-
 
 @app.post("/export-dashboard", response_class=StreamingResponse)
 async def export_dashboard(dashboard_data: DashboardData):

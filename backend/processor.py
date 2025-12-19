@@ -140,7 +140,7 @@ def get_or_create_clinica(cnpj, external_id):
         "nome": external_id or cnpj
     }
 
-    resp = supabase_upsert("clinicas", payload, "cnpj")
+    resp = supabase_upsert("clinicas", payload, "nome")
     if resp:
         return resp[0]["id"]
 

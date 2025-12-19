@@ -992,6 +992,21 @@ async def dashboard_completo(
                 return None
             return _safe_float(df_ctx[col].sum())
 
+        def weighted_avg(df, value_col, weight_col):
+            if value_col not in df.columns or weight_col not in df.columns:
+                return None
+            df_temp = df[[value_col, weight_col]].dropna()
+            if df_temp.empty:
+                return None
+            
+            pesos = df_temp[weight_col]
+            if pesos.sum() <= 0:
+                # Fallback to simple mean if weights are zero/negative
+                return df_temp[value_col].mean()
+            
+            weighted_sum = (df_temp[value_col] * pesos).sum()
+            return weighted_sum / pesos.sum()
+
         # --------------------------
         # 9) KPI principais — agora 100% com base no PERÍODO FILTRADO (df_ctx)
         # --------------------------
@@ -1067,58 +1082,24 @@ async def dashboard_completo(
             if emit_ult and emit_ult > 0 and inad_ult is not None:
                 inad_ultimo_mes = inad_ult / emit_ult
 
-        # TAXA PAGA NO VENCIMENTO — período filtrado
-        pago_venc_media_periodo = (
-            _safe_float(df_ctx["taxa_pago_no_vencimento"].mean())
-            if "taxa_pago_no_vencimento" in df_ctx.columns
-            else None
-        )
-
-        pago_venc_ultimo_mes = (
-            _safe_float(df_ctx_ultimo["taxa_pago_no_vencimento"].mean())
-            if "taxa_pago_no_vencimento" in df_ctx_ultimo.columns
-            else None
-        )
-
-        # TICKET MÉDIO — período filtrado
-        ticket_medio_periodo = (
-            _safe_float(df_ctx["valor_medio_boleto"].mean())
-            if "valor_medio_boleto" in df_ctx.columns
-            else None
-        )
-
-        ticket_medio_ultimo_mes = (
-            _safe_float(df_ctx_ultimo["valor_medio_boleto"].mean())
-            if "valor_medio_boleto" in df_ctx_ultimo.columns
-            else None
-        )
-
-        # TEMPO MÉDIO — período filtrado
-        tempo_medio_periodo = (
-            _safe_float(df_ctx["tempo_medio_pagamento_dias"].mean())
-            if "tempo_medio_pagamento_dias" in df_ctx.columns
-            else None
-        )
-
-        tempo_medio_ultimo_mes = (
-            _safe_float(df_ctx_ultimo["tempo_medio_pagamento_dias"].mean())
-            if "tempo_medio_pagamento_dias" in df_ctx_ultimo.columns
-            else None
-        )
-
-        # PARCELAS MÉDIAS — período filtrado
-        parcelas_media_periodo = (
-            _safe_float(df_ctx["parc_media_parcelas_pond"].mean())
-            if "parc_media_parcelas_pond" in df_ctx.columns
-            else None
-        )
-
-        parcelas_media_ultimo_mes = (
-            _safe_float(df_ctx_ultimo["parc_media_parcelas_pond"].mean())
-            if "parc_media_parcelas_pond" in df_ctx_ultimo.columns
-            else None
-        )
-
+            # TAXA PAGA NO VENCIMENTO — período filtrado
+            pago_venc_media_periodo = _safe_float(weighted_avg(df_ctx, "taxa_pago_no_vencimento", "valor_total_emitido"))
+            pago_venc_ultimo_mes = _safe_float(weighted_avg(df_ctx_ultimo, "taxa_pago_no_vencimento", "valor_total_emitido"))
+        
+        
+            # TICKET MÉDIO — período filtrado
+            ticket_medio_periodo = _safe_float(weighted_avg(df_ctx, "valor_medio_boleto", "valor_total_emitido"))
+            ticket_medio_ultimo_mes = _safe_float(weighted_avg(df_ctx_ultimo, "valor_medio_boleto", "valor_total_emitido"))
+        
+        
+            # TEMPO MÉDIO — período filtrado
+            tempo_medio_periodo = _safe_float(weighted_avg(df_ctx, "tempo_medio_pagamento_dias", "valor_total_emitido"))
+            tempo_medio_ultimo_mes = _safe_float(weighted_avg(df_ctx_ultimo, "tempo_medio_pagamento_dias", "valor_total_emitido"))
+        
+        
+            # PARCELAS MÉDIAS — período filtrado
+            parcelas_media_periodo = _safe_float(weighted_avg(df_ctx, "parc_media_parcelas_pond", "valor_total_emitido"))
+            parcelas_media_ultimo_mes = _safe_float(weighted_avg(df_ctx_ultimo, "parc_media_parcelas_pond", "valor_total_emitido"))
 
         # --------------------------
         # 10) LIMITE SUGERIDO (conservador)

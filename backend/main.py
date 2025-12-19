@@ -1491,6 +1491,122 @@ async def dashboard_completo(
             detail=f"Ocorreu um erro inesperado ao processar os dados do dashboard: {e}",
         )
 
+# ==========================
+# DASHBOARD · QUALIDADE DOS DADOS
+# ==========================
+
+class InconsistenciaItem(BaseModel):
+    tipo: str
+    detalhe: str
+    mes_ref: Optional[str] = None
+
+class QualidadeClinica(BaseModel):
+    clinica_id: str
+    clinica_nome: str
+    inconsistencias: List[InconsistenciaItem]
+
+@app.get("/dashboard/qualidade-dados", response_model=List[QualidadeClinica])
+async def dashboard_qualidade_dados():
+    try:
+        rows = supabase_get("vw_dashboard_final", select="*")
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao carregar dados do dashboard: {e}",
+        )
+
+    if not rows:
+        return []
+
+    df = to_df(rows)
+    
+    # --- Data Preparation ---
+    df["mes_ref_date"] = pd.to_datetime(df.get("mes_ref_date", df.get("mes_ref")), errors="coerce")
+    
+    numeric_cols = [
+        "valor_total_emitido", "taxa_pago_no_vencimento", "taxa_inadimplencia",
+        "tempo_medio_pagamento_dias", "parc_media_parcelas_pond", "valor_medio_boleto"
+    ]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # --- Analysis ---
+    all_inconsistencias = []
+    
+    # Ignore current month for consistency with main dashboard
+    hoje_utc = datetime.utcnow()
+    primeiro_dia_mes_atual = hoje_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0).date()
+    df_filtered = df[df["mes_ref_date"].dt.date < primeiro_dia_mes_atual].copy()
+    
+    clinicas = df_filtered[["clinica_id", "clinica_nome"]].drop_duplicates().dropna()
+
+    for _, clinica_row in clinicas.iterrows():
+        clinica_id = clinica_row["clinica_id"]
+        clinica_nome = clinica_row["clinica_nome"]
+        
+        clinic_df = df_filtered[df_filtered["clinica_id"] == clinica_id].copy()
+        clinic_df = clinic_df.sort_values("mes_ref_date")
+        
+        inconsistencias = []
+
+        # 1. Missing Month Detection
+        if not clinic_df.empty and "mes_ref_date" in clinic_df.columns:
+            clinic_df_dates = clinic_df.dropna(subset=["mes_ref_date"])
+            if not clinic_df_dates.empty:
+                min_date = clinic_df_dates['mes_ref_date'].min()
+                max_date = clinic_df_dates['mes_ref_date'].max()
+                
+                if pd.notna(min_date) and pd.notna(max_date) and min_date != max_date:
+                    expected_months = pd.date_range(start=min_date, end=max_date, freq='MS')
+                    actual_months = pd.to_datetime(clinic_df_dates['mes_ref_date'].unique())
+                    missing = sorted(list(set(expected_months) - set(actual_months)))
+                    
+                    for month in missing:
+                        inconsistencias.append({
+                            "tipo": "Mês Faltante",
+                            "detalhe": f"Não há dados para o mês {month.strftime('%Y-%m')} (período de {min_date.strftime('%Y-%m')} a {max_date.strftime('%Y-%m')})."
+                        })
+        
+        # 2. Strange Data Detection
+        for _, row in clinic_df.iterrows():
+            mes_str = _format_mes_ref(row.get("mes_ref_date"))
+            
+            # Taxa inadimplencia > 100%
+            if "taxa_inadimplencia" in row and pd.notna(row["taxa_inadimplencia"]) and row["taxa_inadimplencia"] > 1:
+                inconsistencias.append({
+                    "tipo": "Valor Inválido",
+                    "mes_ref": mes_str,
+                    "detalhe": f"Taxa de inadimplência é {row['taxa_inadimplencia']:.0%}, o que é > 100%."
+                })
+            
+            # Taxa pago no vencimento > 100%
+            if "taxa_pago_no_vencimento" in row and pd.notna(row["taxa_pago_no_vencimento"]) and row["taxa_pago_no_vencimento"] > 1:
+                inconsistencias.append({
+                    "tipo": "Valor Inválido",
+                    "mes_ref": mes_str,
+                    "detalhe": f"Taxa de pagamento no vencimento é {row['taxa_pago_no_vencimento']:.0%}, o que é > 100%."
+                })
+                
+            # Negative values
+            for col in ["valor_total_emitido", "tempo_medio_pagamento_dias"]:
+                if col in row and pd.notna(row[col]) and row[col] < 0:
+                     inconsistencias.append({
+                        "tipo": "Valor Negativo",
+                        "mes_ref": mes_str,
+                        "detalhe": f"Coluna '{col}' possui valor negativo: {row[col]}."
+                    })
+
+        if inconsistencias:
+            all_inconsistencias.append({
+                "clinica_id": clinica_id,
+                "clinica_nome": clinica_nome,
+                "inconsistencias": inconsistencias
+            })
+            
+    return all_inconsistencias
+
+
 @app.post("/export-dashboard", response_class=StreamingResponse)
 async def export_dashboard(dashboard_data: DashboardData):
     # Funções auxiliares aninhadas para evitar poluir o escopo global

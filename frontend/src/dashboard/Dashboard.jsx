@@ -8,6 +8,7 @@ import DecisaoCredito from "./DecisaoCredito";
 import Comportamento from "./Comportamento";
 import Carteira from "./Carteira";
 import Limites from "./Limites";
+import QualidadeDados from "./QualidadeDados";
 import Tabs from "../components/ui/Tabs";
 import { API_BASE_URL } from "../apiConfig";
 import { useEffect } from "react";
@@ -16,6 +17,7 @@ import PageLayout from "../components/ui/PageLayout";
 
 const TABS = [
   { id: "overview", label: "Visão Geral" },
+  { id: "qualidade", label: "Qualidade dos Dados" },
   { id: "limites", label: "Limites" },
   { id: "decisao", label: "Decisão de Crédito" },
   { id: "comportamento", label: "Comportamento" },
@@ -81,6 +83,9 @@ export default function Dashboard() {
 
         {loadingDashboard && <p>Carregando...</p>}
         {erro && <p className="text-rose-400">{erro}</p>}
+
+        {/* QUALIDADE DOS DADOS (não depende do 'dados' principal) */}
+        {activeTab === "qualidade" && <QualidadeDados />}
 
         {dados && !loadingDashboard && !erro && (
           <>

@@ -734,6 +734,36 @@ def _fator_limite_score(s):
         return 0.25
     return 0.15
 
+def _clamp01(x):
+    try:
+        x = float(x)
+    except Exception:
+        return 0.0
+    if math.isnan(x):
+        return 0.0
+    return max(0.0, min(1.0, x))
+
+def _calc_score_row(row):
+    inad_real = row.get("taxa_inadimplencia_real")
+    pago_venc = row.get("taxa_pago_no_vencimento")
+    dias = row.get("tempo_medio_pagamento_dias")
+    parc = row.get("parc_media_parcelas_pond")
+    risk_inad = _clamp01(inad_real / 0.03) if inad_real is not None else 0.0
+    risk_atraso = _clamp01((1.0 - float(pago_venc)) / 0.25) if pago_venc is not None else 0.0
+    risk_dias = _clamp01((float(dias) - 5.0) / 60.0) if dias is not None else 0.0
+    risk_parc = _clamp01((float(parc) - 1.0) / 11.0) if parc is not None else 0.0
+    score = 1.0 - (0.50 * risk_inad + 0.25 * risk_atraso + 0.15 * risk_dias + 0.10 * risk_parc)
+    return max(0.0, min(1.0, score))
+
+def _categoria_from_score(s):
+    s = _safe_float(s)
+    if s is None: return None
+    if s >= 0.80: return "A"
+    if s >= 0.60: return "B"
+    if s >= 0.40: return "C"
+    if s >= 0.20: return "D"
+    return "E"
+
 @app.get("/dashboard", response_model=DashboardData)
 async def dashboard_completo(
     clinica_id: str | None = None,
@@ -1607,183 +1637,129 @@ async def dashboard_qualidade_dados():
     return all_inconsistencias
 
 
-@app.post("/export-dashboard", response_class=StreamingResponse)
-async def export_dashboard(dashboard_data: DashboardData):
-    # Funções auxiliares aninhadas para evitar poluir o escopo global
-    # e garantir que a lógica seja autocontida para a exportação.
-    def _clamp01(x):
-        try:
-            x = float(x)
-        except Exception:
-            return 0.0
-        if pd.isna(x):
-            return 0.0
-        return max(0.0, min(1.0, x))
+# ==========================
+# NEW EXPORT LOGIC
+# ==========================
 
-    def _calc_score_row(row):
-        inad_real = row.get("taxa_inadimplencia_real")
-        pago_venc = row.get("taxa_pago_no_vencimento")
-        dias = row.get("tempo_medio_pagamento_dias")
-        parc = row.get("parc_media_parcelas_pond")
+class ExportPayload(BaseModel):
+    columns: List[str]
+    months: List[str]
+    view_type: str
+    clinica_ids: List[str]
 
-        risk_inad = _clamp01(inad_real / 0.03) if inad_real is not None else 0.0
-        risk_atraso = _clamp01((1.0 - float(pago_venc)) / 0.25) if pago_venc is not None else 0.0
-        risk_dias = _clamp01((float(dias) - 5.0) / 60.0) if dias is not None else 0.0
-        risk_parc = _clamp01((float(parc) - 1.0) / 11.0) if parc is not None else 0.0
-
-        score = 1.0 - (0.50 * risk_inad + 0.25 * risk_atraso + 0.15 * risk_dias + 0.10 * risk_parc)
-        return max(0.0, min(1.0, score))
-
-    def _fator_limite_score(s):
-        s = _safe_float(s)
-        if s is None: return 0.10
-        if s >= 0.80: return 0.40
-        if s >= 0.70: return 0.30
-        if s >= 0.60: return 0.25
-        if s >= 0.50: return 0.20
-        if s >= 0.40: return 0.15
-        if s >= 0.20: return 0.10
-        return 0.05
-
-    # 1. Obter filtros do payload
-    filtros = dashboard_data.filtros.get("periodo", {})
-    inicio = filtros.min_mes_ref
-    fim = filtros.max_mes_ref
-
-    # 2. Carregar todos os dados da view
+async def _generate_export_df(payload: ExportPayload) -> pd.DataFrame:
+    # 1. Fetch all data
     try:
         rows = supabase_get("vw_dashboard_final", select="*")
+        if not rows:
+            return pd.DataFrame()
+        df = to_df(rows)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao carregar dados para exportação: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao carregar dados: {e}")
 
-    df_full = to_df(rows)
-    if df_full.empty:
-        raise HTTPException(status_code=404, detail="Nenhum dado encontrado para exportar.")
-
-    # 3. Pré-processamento (copiado e adaptado de /dashboard)
-    df_full["mes_ref_date"] = pd.to_datetime(df_full.get("mes_ref_date", df_full.get("mes_ref")), errors="coerce")
-    df_full.dropna(subset=["mes_ref_date"], inplace=True)
-
-    hoje_utc = datetime.utcnow()
-    primeiro_dia_mes_atual = hoje_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0).date()
-    df_full = df_full[df_full["mes_ref_date"].dt.date < primeiro_dia_mes_atual]
-
-    for col in ["valor_total_emitido", "taxa_pago_no_vencimento", "taxa_inadimplencia", "tempo_medio_pagamento_dias", "parc_media_parcelas_pond", "limite_aprovado"]:
-        if col in df_full.columns:
-            df_full[col] = pd.to_numeric(df_full[col], errors="coerce")
-    
-    df_full["valor_total_emitido"] = df_full["valor_total_emitido"].fillna(0)
-
-    # Inadimplência Real
-    df_full["taxa_pago_no_vencimento"] = df_full["taxa_pago_no_vencimento"].fillna(0).clip(0, 1)
-    df_full["taxa_inad_dos_atrasados"] = df_full["taxa_inadimplencia"].fillna(0).clip(0, 1)
-    df_full["valor_nao_pago_no_venc"] = df_full["valor_total_emitido"] * (1 - df_full["taxa_pago_no_vencimento"])
-    df_full["valor_inad_real"] = df_full["valor_nao_pago_no_venc"] * df_full["taxa_inad_dos_atrasados"]
-    
-    mask_emitido = df_full["valor_total_emitido"] > 0
-    df_full["taxa_inadimplencia_real"] = None
-    df_full.loc[mask_emitido, "taxa_inadimplencia_real"] = df_full.loc[mask_emitido, "valor_inad_real"] / df_full.loc[mask_emitido, "valor_total_emitido"]
-
-    # Score Ajustado
-    df_full["score_ajustado"] = df_full.apply(_calc_score_row, axis=1)
-
-    # 4. Preparar dados para exportação
-    export_rows = []
-    
-    dt_inicio = pd.to_datetime(inicio + "-01") if inicio else None
-    dt_fim = (pd.to_datetime(fim + "-01") + pd.offsets.MonthEnd(0)) if fim else None
-
-    # Iterar sobre as clínicas do ranking recebido
-    for clinica_rank_info in dashboard_data.ranking_clinicas:
-        clinica_id = clinica_rank_info.clinica_id
-        df_clinica_full = df_full[df_full["clinica_id"] == clinica_id].copy()
-
-        if df_clinica_full.empty:
-            continue
-        
-        # Filtrar pelo período para KPIs
-        df_recorte = df_clinica_full
-        if dt_inicio and dt_fim:
-            df_recorte = df_clinica_full[
-                (df_clinica_full["mes_ref_date"] >= dt_inicio) &
-                (df_clinica_full["mes_ref_date"] <= dt_fim)
-            ].copy()
-        
-        # Calcular KPIs do período
-        valor_emitido_periodo = _safe_float(df_recorte["valor_total_emitido"].sum())
-        
-        inadimplencia_periodo = None
-        total_emitido_recorte = _safe_float(df_recorte["valor_total_emitido"].sum())
-        total_inad_recorte = _safe_float(df_recorte["valor_inad_real"].sum())
-        if total_emitido_recorte and total_emitido_recorte > 0 and total_inad_recorte is not None:
-            inadimplencia_periodo = total_inad_recorte / total_emitido_recorte
+    # 2. Basic cleaning and type conversion
+    df["mes_ref_date"] = pd.to_datetime(df.get("mes_ref_date", df.get("mes_ref")), errors="coerce")
+    numeric_cols = [
+        "valor_total_emitido", "taxa_pago_no_vencimento", "taxa_inadimplencia",
+        "tempo_medio_pagamento_dias", "parc_media_parcelas_pond", "valor_medio_boleto",
+        "score_ajustado", "limite_aprovado", "limite_sugerido"
+    ]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
             
-        # Calcular Limite Sugerido (regra normal)
-        limite_sugerido = None
-        LIMITE_TETO_GLOBAL = 1_000_000.0
-        
-        last_dt_clin = df_clinica_full["mes_ref_date"].max()
-        
-        score_atual_clinica = None
-        if not df_recorte.empty:
-            last_dt_recorte = df_recorte["mes_ref_date"].max()
-            df_ultimo_mes_recorte = df_recorte[df_recorte["mes_ref_date"] == last_dt_recorte]
-            if not df_ultimo_mes_recorte.empty:
-                score_atual_clinica = _safe_float(df_ultimo_mes_recorte["score_ajustado"].mean())
-
-        # Bases de faturamento (12M, 3M, 1M)
-        base_12m = _safe_float(df_clinica_full[df_clinica_full["mes_ref_date"] >= last_dt_clin - pd.DateOffset(months=11)]["valor_total_emitido"].mean())
-        base_3m = _safe_float(df_clinica_full[df_clinica_full["mes_ref_date"] >= last_dt_clin - pd.DateOffset(months=2)]["valor_total_emitido"].mean())
-        base_1m = _safe_float(df_clinica_full[df_clinica_full["mes_ref_date"] == last_dt_clin]["valor_total_emitido"].sum())
-        
-        componentes = []
-        pesos = []
-        if base_12m: componentes.append(base_12m); pesos.append(0.5)
-        if base_3m: componentes.append(base_3m); pesos.append(0.3)
-        if base_1m: componentes.append(base_1m); pesos.append(0.2)
-        
-        base_mensal_mix = sum(c * p for c, p in zip(componentes, pesos)) / sum(pesos) if componentes else 0.0
-        
-        fator = _fator_limite_score(score_atual_clinica)
-        bruto = base_mensal_mix * fator
-        
-        if bruto > 0:
-            limite_sugerido = min(bruto, LIMITE_TETO_GLOBAL)
-
-        export_rows.append({
-            "Nome": clinica_rank_info.clinica_nome,
-            "CNPJ": clinica_rank_info.cnpj,
-            "Valor Emitido": valor_emitido_periodo,
-            "Inadimplência": inadimplencia_periodo,
-            "Limite Sugerido": limite_sugerido,
-            "Limite Aprovado": clinica_rank_info.limite_aprovado,
-        })
-
-    # 5. Gerar o arquivo XLSX
-    output = BytesIO()
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Exportação Dashboard"
+    # --- Add calculated columns that might be requested ---
+    df["taxa_pago_no_vencimento"] = df["taxa_pago_no_vencimento"].clip(0, 1)
+    df["taxa_inad_dos_atrasados"] = df["taxa_inadimplencia"].clip(0, 1)
+    df["valor_nao_pago_no_venc"] = df["valor_total_emitido"] * (1 - df["taxa_pago_no_vencimento"])
+    df["valor_inad_real"] = df["valor_nao_pago_no_venc"] * df["taxa_inad_dos_atrasados"]
+    df["taxa_inadimplencia_real"] = (df["valor_inad_real"] / df["valor_total_emitido"]).where(df["valor_total_emitido"] > 0, 0)
     
-    if not export_rows:
-        ws.append(["Nenhum dado para exibir com os filtros selecionados."])
-    else:
-        headers = list(export_rows[0].keys())
-        ws.append(headers)
-        for row in export_rows:
-            ws.append([
-                row.get("Nome"),
-                row.get("CNPJ"),
-                row.get("Valor Emitido"),
-                row.get("Inadimplência"),
-                row.get("Limite Sugerido"),
-                row.get("Limite Aprovado"),
-            ])
+    # Re-calculate score using the global function
+    df["score_credito"] = df.apply(_calc_score_row, axis=1)
+    df["categoria_risco"] = df["score_credito"].apply(_categoria_from_score)
 
-    wb.save(output)
+
+    # 3. Filter by months
+    if not payload.months:
+        raise HTTPException(status_code=400, detail="A lista de meses não pode estar vazia.")
+    
+    df["mes_ref"] = df["mes_ref_date"].dt.strftime('%Y-%m')
+    df_filtered = df[df["mes_ref"].isin(payload.months)].copy()
+
+    # 4. Filter by clinics
+    if payload.clinica_ids: # If the list is not empty, filter
+        df_filtered = df_filtered[df_filtered["clinica_id"].isin(payload.clinica_ids)]
+
+    if df_filtered.empty:
+        return pd.DataFrame()
+
+    # 5. Handle view type (aggregation)
+    if payload.view_type == 'consolidado':
+        agg_funcs = {
+            'valor_total_emitido': 'sum',
+            'valor_inad_real': 'sum',
+            'score_credito': 'mean',
+            'limite_aprovado': 'last',
+            'limite_sugerido': 'last',
+            'tempo_medio_pagamento_dias': 'mean',
+            'valor_medio_boleto': 'mean',
+            'parc_media_parcelas_pond': 'mean',
+        }
+        
+        valid_agg_funcs = {k: v for k, v in agg_funcs.items() if k in df_filtered.columns}
+        
+        # Sort by date to ensure 'last' takes the latest value
+        df_filtered = df_filtered.sort_values('mes_ref_date')
+        
+        grouped = df_filtered.groupby(['clinica_id', 'clinica_nome', 'cnpj'], as_index=False)
+        df_agg = grouped.agg(valid_agg_funcs)
+
+        if 'valor_total_emitido' in df_agg and 'valor_inad_real' in df_agg:
+             df_agg["taxa_inadimplencia_real"] = (df_agg["valor_inad_real"] / df_agg["valor_total_emitido"]).where(df_agg["valor_total_emitido"] > 0, 0)
+
+        if 'categoria_risco' in payload.columns:
+            latest_categoria = df_filtered.loc[df_filtered.groupby('clinica_id')['mes_ref_date'].idxmax()][['clinica_id', 'categoria_risco']]
+            df_agg = pd.merge(df_agg, latest_categoria, on='clinica_id', how='left')
+
+        df_final = df_agg
+    else: # 'separado'
+        df_final = df_filtered.sort_values(['clinica_nome', 'mes_ref_date'])
+
+    # 6. Select final columns
+    final_columns = [col for col in payload.columns if col in df_final.columns]
+    df_to_return = df_final[final_columns]
+    
+    return df_to_return
+
+
+@app.post("/export/preview", response_model=List[Dict[str, Any]])
+async def export_preview(payload: ExportPayload):
+    # The payload from frontend now has `view_type` instead of `type`
+    df = await _generate_export_df(payload)
+    if df.empty:
+        return []
+    df_sample = df.head(10)
+    # Format numbers for better preview
+    for col in df_sample.columns:
+        if pd.api.types.is_numeric_dtype(df_sample[col]):
+            df_sample[col] = df_sample[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "")
+    df_sample = df_sample.fillna("")
+    return df_sample.to_dict(orient="records")
+
+
+@app.post("/export-dashboard", response_class=StreamingResponse)
+async def export_dashboard(payload: ExportPayload):
+    df = await _generate_export_df(payload)
+
+    if df.empty:
+        raise HTTPException(status_code=404, detail="Nenhum dado encontrado para exportar com os filtros selecionados.")
+
+    output = BytesIO()
+    df.to_excel(output, index=False, sheet_name='Dados')
     output.seek(0)
-
-    filename = f"export_dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    
+    filename = f"relatorio_credito_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

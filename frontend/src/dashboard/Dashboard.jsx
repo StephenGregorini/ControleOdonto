@@ -42,14 +42,14 @@ export default function Dashboard() {
 }, [dados]);
 
 
-  const handleExport = async () => {
+  const handleExport = async (exportOptions) => {
     try {
       const response = await fetch(`${API_BASE_URL}/export-dashboard`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(dados),
+        body: JSON.stringify(exportOptions),
       });
 
       if (!response.ok) {

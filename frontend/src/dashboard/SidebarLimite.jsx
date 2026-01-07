@@ -21,6 +21,7 @@ export default function SidebarLimite({ open, onClose }) {
   } = useDashboard();
 
   const k = dados?.kpis || {};
+  const limite = dados?.limite_motor || {};
   const nome = dados?.contexto?.clinica_nome || "-";
 
   const [valor, setValor] = useState("");
@@ -32,7 +33,7 @@ export default function SidebarLimite({ open, onClose }) {
   useEffect(() => {
     if (dados) {
       const valorAtual = k.limite_aprovado;
-      const valorSug = k.limite_sugerido;
+      const valorSug = limite.limite_sugerido;
       const inicial =
         valorAtual != null && !Number.isNaN(valorAtual)
           ? valorAtual
@@ -56,7 +57,7 @@ export default function SidebarLimite({ open, onClose }) {
         limite_aprovado: limite,
         observacao: obs || null,
         aprovado_por: profile?.nome || profile?.email || "admin",
-        faturamento_base: k.limite_sugerido_base_mensal_mix || null,
+        faturamento_base: limite.limite_sugerido_base_mensal_mix || null,
         score_base: k.score_atual || null,
       };
 
@@ -168,7 +169,7 @@ export default function SidebarLimite({ open, onClose }) {
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   Referência do modelo:{" "}
-                  <span className="text-sky-300">{formatCurrency(k.limite_sugerido)}</span>
+                  <span className="text-sky-300">{formatCurrency(limite.limite_sugerido)}</span>
                 </p>
               </div>
 

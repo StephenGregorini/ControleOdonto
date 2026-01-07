@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Modal from './Modal';
 import { API_BASE_URL } from '../../apiConfig';
 
@@ -11,6 +11,7 @@ const ALL_COLUMNS = [
     { id: 'limite_aprovado', label: 'Limite Aprovado' },
     { id: 'limite_sugerido', label: 'Limite Sugerido' },
     { id: 'valor_total_emitido', label: 'Valor Total Emitido' },
+    { id: 'valor_emitido_ultimo_mes_fechado', label: 'Valor emitido no ultimo mes fechado' },
     { id: 'taxa_inadimplencia_real', label: 'Inadimplência Real' },
     { id: 'taxa_pago_no_vencimento', label: 'Taxa Pago no Vencimento' },
     { id: 'valor_medio_boleto', label: 'Ticket Médio' },
@@ -18,7 +19,7 @@ const ALL_COLUMNS = [
     { id: 'parc_media_parcelas_pond', label: 'Parcela Média' },
 ];
 
-const ExportModal = ({ isOpen, onClose, onExport, availableMonths }) => {
+const ExportModal = ({ isOpen, onClose, onExport, availableMonths, defaultClinicaId }) => {
   const [selectedColumns, setSelectedColumns] = useState(ALL_COLUMNS.map(c => c.id));
   
   const [allClinicas, setAllClinicas] = useState([]);
@@ -29,8 +30,94 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths }) => {
 
   const [viewType, setViewType] = useState('consolidado');
   const [selectedMonths, setSelectedMonths] = useState([]);
+  const [startYear, setStartYear] = useState("");
+  const [startMonth, setStartMonth] = useState("");
+  const [endYear, setEndYear] = useState("");
+  const [endMonth, setEndMonth] = useState("");
   const [previewData, setPreviewData] = useState(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
+  const monthsByNumber = [
+    { value: "01", label: "Jan" },
+    { value: "02", label: "Fev" },
+    { value: "03", label: "Mar" },
+    { value: "04", label: "Abr" },
+    { value: "05", label: "Mai" },
+    { value: "06", label: "Jun" },
+    { value: "07", label: "Jul" },
+    { value: "08", label: "Ago" },
+    { value: "09", label: "Set" },
+    { value: "10", label: "Out" },
+    { value: "11", label: "Nov" },
+    { value: "12", label: "Dez" },
+  ];
+
+  const parseYearMonth = (ym) => {
+    if (!ym) return null;
+    const [y, m] = String(ym).split("-");
+    if (!y || !m) return null;
+    return { year: Number(y), month: Number(m) };
+  };
+
+  const makeYearMonth = (year, month) => {
+    if (!year || !month) return null;
+    const mm = String(month).padStart(2, "0");
+    return `${year}-${mm}`;
+  };
+
+  const buildMonthRange = (startYm, endYm) => {
+    const start = parseYearMonth(startYm);
+    const end = parseYearMonth(endYm);
+    if (!start || !end) return [];
+    const startDate = new Date(start.year, start.month - 1, 1);
+    const endDate = new Date(end.year, end.month - 1, 1);
+    if (startDate > endDate) return [];
+    const months = [];
+    const current = new Date(startDate);
+    while (current <= endDate) {
+      const value = `${current.getFullYear()}-${String(
+        current.getMonth() + 1
+      ).padStart(2, "0")}`;
+      months.push(value);
+      current.setMonth(current.getMonth() + 1);
+    }
+    return months;
+  };
+
+  const availableBounds = useMemo(() => {
+    if (!availableMonths || availableMonths.length === 0) return null;
+    const values = availableMonths.map((m) => m.value).filter(Boolean).sort();
+    return {
+      min: values[0],
+      max: values[values.length - 1],
+    };
+  }, [availableMonths]);
+
+  const yearOptions = useMemo(() => {
+    if (!availableBounds) return [];
+    const minYear = Number(String(availableBounds.min).split("-")[0]);
+    const maxYearBase = Number(String(availableBounds.max).split("-")[0]);
+    const currentYear = new Date().getFullYear();
+    const maxYear = Math.max(maxYearBase, currentYear);
+    const years = [];
+    for (let y = minYear; y <= maxYear; y += 1) {
+      years.push(String(y));
+    }
+    return years;
+  }, [availableBounds]);
+
+  const selectedRange = useMemo(() => {
+    const startYm = makeYearMonth(startYear, startMonth);
+    const endYm = makeYearMonth(endYear, endMonth);
+    return buildMonthRange(startYm, endYm);
+  }, [startYear, startMonth, endYear, endMonth]);
+
+  const invalidRange =
+    startYear &&
+    startMonth &&
+    endYear &&
+    endMonth &&
+    selectedRange.length === 0;
 
   useEffect(() => {
     if (isOpen) {
@@ -43,7 +130,11 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths }) => {
             const sortedData = Array.isArray(data) ? data.sort((a, b) => a.nome.localeCompare(b.nome)) : [];
             setAllClinicas(sortedData);
             setFilteredClinicas(sortedData);
-            setSelectedClinicas(sortedData.map(c => c.id));
+            if (defaultClinicaId && defaultClinicaId !== "todas") {
+              setSelectedClinicas([defaultClinicaId]);
+            } else {
+              setSelectedClinicas(sortedData.map(c => c.id));
+            }
           }
         } catch (error) {
           console.error("Erro ao carregar clínicas", error);
@@ -55,11 +146,20 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths }) => {
       setSelectedColumns(ALL_COLUMNS.map(c => c.id));
       setViewType('consolidado');
       setClinicSearch("");
-      if (availableMonths) {
-        setSelectedMonths(availableMonths.map(m => m.value));
+      if (availableBounds) {
+        const [minY, minM] = availableBounds.min.split("-");
+        const [maxY, maxM] = availableBounds.max.split("-");
+        setStartYear(minY);
+        setStartMonth(minM);
+        setEndYear(maxY);
+        setEndMonth(maxM);
       }
     }
-  }, [isOpen, availableMonths]);
+  }, [isOpen, availableBounds, defaultClinicaId]);
+
+  useEffect(() => {
+    setSelectedMonths(selectedRange);
+  }, [selectedRange]);
 
   useEffect(() => {
     const lowerCaseSearch = clinicSearch.toLowerCase();
@@ -73,10 +173,6 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths }) => {
     setSelectedColumns(prev => prev.includes(columnId) ? prev.filter(id => id !== columnId) : [...prev, columnId]);
   };
   
-  const handleMonthChange = (monthValue) => {
-    setSelectedMonths(prev => prev.includes(monthValue) ? prev.filter(m => m !== monthValue) : [...prev, monthValue]);
-  };
-
   const handleClinicChange = (clinicId) => {
     setSelectedClinicas(prev => prev.includes(clinicId) ? prev.filter(id => id !== clinicId) : [...prev, clinicId]);
   };
@@ -183,16 +279,80 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths }) => {
             </div>
 
             <h3 className="text-lg font-semibold mb-3 text-sky-300">Qual período incluir?</h3>
-             <div className="grid grid-cols-2 gap-x-4 max-h-40 overflow-y-auto border border-slate-700 p-3 rounded-lg">
-                {availableMonths && availableMonths.map(month => (
-                    <Checkbox 
-                    key={month.value}
-                    name={month.value} 
-                    label={month.label}
-                    checked={selectedMonths.includes(month.value)}
-                    onChange={() => handleMonthChange(month.value)}
-                    />
-                ))}
+            <div className="border border-slate-700 p-3 rounded-lg space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">
+                    De
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={startMonth}
+                      onChange={(e) => setStartMonth(e.target.value)}
+                      className="bg-slate-800 border border-slate-700 rounded-md px-2 py-2 text-sm"
+                    >
+                      {monthsByNumber.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={startYear}
+                      onChange={(e) => setStartYear(e.target.value)}
+                      className="bg-slate-800 border border-slate-700 rounded-md px-2 py-2 text-sm"
+                    >
+                      {yearOptions.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">
+                    Até
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={endMonth}
+                      onChange={(e) => setEndMonth(e.target.value)}
+                      className="bg-slate-800 border border-slate-700 rounded-md px-2 py-2 text-sm"
+                    >
+                      {monthsByNumber.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={endYear}
+                      onChange={(e) => setEndYear(e.target.value)}
+                      className="bg-slate-800 border border-slate-700 rounded-md px-2 py-2 text-sm"
+                    >
+                      {yearOptions.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400">
+                {selectedRange.length > 0
+                  ? `Período selecionado: ${selectedRange[0]} — ${selectedRange[selectedRange.length - 1]} (${selectedRange.length} meses)`
+                  : "Selecione um intervalo válido."}
+              </p>
+
+              {invalidRange && (
+                <p className="text-[11px] text-rose-300">
+                  O período inicial não pode ser maior que o final.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -207,10 +367,10 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths }) => {
                     </p>
                 </div>
                 <div className='flex gap-4'>
-                    <button onClick={handleGeneratePreview} disabled={isLoadingPreview} className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition-colors text-sm font-bold text-white disabled:bg-indigo-800 disabled:cursor-not-allowed">
+                    <button onClick={handleGeneratePreview} disabled={isLoadingPreview || invalidRange} className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition-colors text-sm font-bold text-white disabled:bg-indigo-800 disabled:cursor-not-allowed">
                         {isLoadingPreview ? 'Gerando...' : 'Gerar Pré-visualização'}
                     </button>
-                    <button onClick={handleExport} className="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 transition-colors text-sm font-bold text-white">
+                    <button onClick={handleExport} disabled={invalidRange} className="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 transition-colors text-sm font-bold text-white disabled:bg-sky-800 disabled:cursor-not-allowed">
                         Gerar e Baixar XLSX
                     </button>
                      <button onClick={onClose} className="px-5 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors text-sm font-medium">

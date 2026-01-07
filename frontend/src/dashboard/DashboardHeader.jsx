@@ -30,7 +30,7 @@ const generateMonths = (startDate, endDate) => {
 
 
 export default function DashboardHeader({ onExport }) {
-  const { profile, dados } = useDashboard();
+  const { profile, dados, clinicaId } = useDashboard();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const periodo = dados?.filtros?.periodo;
@@ -108,6 +108,7 @@ export default function DashboardHeader({ onExport }) {
         onClose={() => setIsModalOpen(false)}
         onExport={handleConfirmExport}
         availableMonths={availableMonths}
+        defaultClinicaId={clinicaId}
       />
     </>
   );

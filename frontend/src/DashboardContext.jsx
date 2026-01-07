@@ -37,6 +37,7 @@ export function DashboardProvider({ children }) {
     janelaMeses,
     inicio: periodoInicio,
     fim: periodoFim,
+    mesRefCustom,
   });
 
   const [panelLimiteAberto, setPanelLimiteAberto] = useState(false);

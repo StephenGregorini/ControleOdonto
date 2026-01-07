@@ -1,14 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
 import { useDashboard } from "../DashboardContext";
-import { formatCurrency, formatPercent } from "../utils/formatters";
+import { formatCurrency, formatPercent, formatMesRef } from "../utils/formatters";
 import HistoricoLimites from "../components/ui/HistoricoLimites";
+import LimiteUtilizacaoModal from "./LimiteUtilizacaoModal";
 
 export default function DecisaoCredito() {
-  const { dados, setPanelLimiteAberto, clinicaId } = useDashboard();
+  const { dados, setPanelLimiteAberto, clinicaId, reloadDashboard } = useDashboard();
 
   if (!dados) return null;
 
   const k = dados.kpis || {};
+  const limite = dados.limite_motor || {};
   const historico = dados.historico_limite || [];
 
   // ----------------------------
@@ -27,6 +29,7 @@ export default function DecisaoCredito() {
   const limiteAtualAtivo =
     k.limite_aprovado != null && !Number.isNaN(k.limite_aprovado);
 
+  const [modalUsoAberto, setModalUsoAberto] = useState(false);
 
   return (
     <section className="space-y-6">
@@ -56,12 +59,20 @@ export default function DecisaoCredito() {
             <p className="text-slate-400 text-xs">Limite aprovado</p>
 
             {clinicaId !== "todas" && (
-              <button
-                onClick={() => setPanelLimiteAberto(true)}
-                className="px-3 py-1.5 rounded-full text-[11px] border border-sky-500 text-sky-200 bg-sky-500/10 hover:bg-sky-500/20"
-              >
-                Aprovar limite
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setModalUsoAberto(true)}
+                  className="px-3 py-1.5 rounded-full text-[11px] border border-slate-600 text-slate-200 hover:bg-slate-800"
+                >
+                  Registrar uso
+                </button>
+                <button
+                  onClick={() => setPanelLimiteAberto(true)}
+                  className="px-3 py-1.5 rounded-full text-[11px] border border-sky-500 text-sky-200 bg-sky-500/10 hover:bg-sky-500/20"
+                >
+                  Aprovar limite
+                </button>
+              </div>
             )}
           </div>
 
@@ -84,21 +95,46 @@ export default function DecisaoCredito() {
 
           {/* Caso 3 — Tem limite ativo */}
           {limiteAtualAtivo && (
-            <h3 className="text-xl font-semibold text-emerald-300">
-              {formatCurrency(k.limite_aprovado)}
-            </h3>
+            <>
+              <h3 className="text-xl font-semibold text-emerald-300">
+                {formatCurrency(k.limite_aprovado)}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Utilizado:{" "}
+                <span className="text-slate-200">{formatCurrency(k.limite_utilizado)}</span>{" "}
+                · Disponível:{" "}
+                <span className="text-slate-200">{formatCurrency(k.limite_disponivel)}</span>
+              </p>
+            </>
           )}
 
           {/* Sugestão */}
           <p className="text-slate-400 text-xs mt-2">Sugestão do motor:</p>
           <p className="text-xl font-semibold text-sky-300">
-            {formatCurrency(k.limite_sugerido)}
+            {formatCurrency(limite.limite_sugerido)}
           </p>
 
-          {k.limite_sugerido_fator && (
+          {limite.limite_sugerido_fator && (
             <p className="text-[10px] text-slate-500 mt-1">
-              Fator de risco aplicado: {k.limite_sugerido_fator.toFixed(2)}
+              Fator de risco aplicado: {limite.limite_sugerido_fator.toFixed(2)}
             </p>
+          )}
+          {limite.mes_ref_base && (
+            <p className="text-[10px] text-slate-500 mt-1">
+              Base fechada em: {limite.mes_ref_base}
+            </p>
+          )}
+
+          {k.limite_aprovado != null && (
+            <div className="mt-3 space-y-1">
+              <p className="text-[11px] text-slate-500">Limite disponível</p>
+              <p className="text-lg font-semibold text-emerald-300">
+                {formatCurrency(k.limite_disponivel)}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                Utilizado: {formatCurrency(k.limite_utilizado || 0)}
+              </p>
+            </div>
           )}
         </div>
 
@@ -124,57 +160,93 @@ export default function DecisaoCredito() {
           Como o limite sugerido é calculado
         </h3>
 
+        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3 mb-4">
+          <ol className="text-[11px] text-slate-400 space-y-1 list-decimal list-inside">
+            <li>Definimos o mês fechado: é o mês anterior ao último upload da clínica.</li>
+            <li>Calculamos 3 bases de faturamento: média 12M, média 3M e último mês.</li>
+            <li>Fazemos um mix conservador: 12M (50%), 3M (30%), último mês (20%).</li>
+            <li>Aplicamos o fator de risco do score para chegar no limite bruto.</li>
+            <li>Aplicamos teto dinâmico (1.5x maior base) e teto global (R$ 3.000.000).</li>
+          </ol>
+        </div>
+
         <div className="grid md:grid-cols-3 gap-4 text-sm text-slate-300">
+          <div>
+            <p>Upload mais recente:</p>
+            <p className="text-slate-200 font-medium">
+              {formatMesRef(limite.mes_upload_referencia)}
+            </p>
+          </div>
+
+          <div>
+            <p>Mês fechado da regra:</p>
+            <p className="text-slate-200 font-medium">
+              {formatMesRef(limite.mes_ref_regra)}
+            </p>
+          </div>
+
+          <div>
+            <p>Mês base usado:</p>
+            <p className="text-slate-200 font-medium">
+              {formatMesRef(limite.mes_ref_base)}
+            </p>
+          </div>
+
           <div>
             <p>Média mensal (12M):</p>
             <p className="text-sky-300 font-medium">
-              {formatCurrency(k.limite_sugerido_base_media12m)}
+              {formatCurrency(limite.limite_sugerido_base_media12m)}
             </p>
           </div>
 
           <div>
             <p>Média mensal (3M):</p>
             <p className="text-sky-300 font-medium">
-              {formatCurrency(k.limite_sugerido_base_media3m)}
+              {formatCurrency(limite.limite_sugerido_base_media3m)}
             </p>
           </div>
 
           <div>
             <p>Último mês:</p>
             <p className="text-sky-300 font-medium">
-              {formatCurrency(k.limite_sugerido_base_ultimo_mes)}
+              {formatCurrency(limite.limite_sugerido_base_ultimo_mes)}
             </p>
           </div>
 
           <div>
             <p>Base combinada:</p>
             <p className="text-sky-300 font-medium">
-              {formatCurrency(k.limite_sugerido_base_mensal_mix)}
+              {formatCurrency(limite.limite_sugerido_base_mensal_mix)}
             </p>
           </div>
 
           <div>
             <p>Fator por score:</p>
             <p className="text-sky-300 font-medium">
-              {k.limite_sugerido_fator?.toFixed(2)}
+              {limite.limite_sugerido_fator?.toFixed(2)}
             </p>
           </div>
 
           <div>
             <p>Teto global:</p>
             <p className="text-slate-200 font-medium">
-              {formatCurrency(k.limite_sugerido_teto_global)}
+              {formatCurrency(limite.limite_sugerido_teto_global)}
             </p>
           </div>
         </div>
-
-        <p className="text-[11px] text-slate-500 mt-3">
-          Cálculo conservador: 12M (50%), 3M (30%), último mês (20%).
-        </p>
       </div>
 
       {/* HISTÓRICO */}
       <HistoricoLimites historico={historico} />
+
+      <LimiteUtilizacaoModal
+        open={modalUsoAberto}
+        onClose={() => setModalUsoAberto(false)}
+        clinicaId={clinicaId}
+        limiteAprovado={k.limite_aprovado}
+        limiteUtilizado={k.limite_utilizado}
+        onSaved={reloadDashboard}
+      />
     </section>
   );
 }

@@ -57,6 +57,9 @@ export default function DashboardFilters() {
 
   const periodoMin = dados?.filtros?.periodo?.min_mes_ref;
   const periodoMax = dados?.filtros?.periodo?.max_mes_ref;
+  const disponivelMin = dados?.filtros?.periodo?.disponivel_min;
+  const disponivelMax = dados?.filtros?.periodo?.disponivel_max;
+  const mesesFaltantes = dados?.filtros?.periodo?.meses_faltantes || [];
 
   return (
     <Card className="p-6 mb-6">
@@ -66,10 +69,10 @@ export default function DashboardFilters() {
           Filtros do Painel
         </h2>
 
-        <p className="text-[11px] text-slate-500">
+        <div className="text-[11px] text-slate-500">
           {periodoMin && periodoMax ? (
             <>
-              Dados disponíveis:{" "}
+              Período solicitado:{" "}
               <span className="text-sky-300 font-medium">
                 {formatMesRef(periodoMin)} — {formatMesRef(periodoMax)}
               </span>
@@ -77,7 +80,20 @@ export default function DashboardFilters() {
           ) : (
             "Carregando período..."
           )}
-        </p>
+          {disponivelMin && disponivelMax && (
+            <div className="text-[10px] text-slate-400 mt-1">
+              Meses com dados: {formatMesRef(disponivelMin)} — {formatMesRef(disponivelMax)}
+            </div>
+          )}
+          {mesesFaltantes.length > 0 && (
+            <div className="text-[10px] text-amber-400 mt-1">
+              {mesesFaltantes.length} mês(es) sem dados no período.
+            </div>
+          )}
+          <div className="text-[10px] text-slate-400 mt-1">
+            Filtros afetam apenas a visão do período. O limite sugerido usa mês fechado.
+          </div>
+        </div>
       </div>
 
       {/* GRID */}
@@ -156,9 +172,12 @@ export default function DashboardFilters() {
 
           {mesRefCustom && (
             <span className="text-[10px] text-amber-400 mt-1">
-              Motor usando {formatMesRef(mesRefCustom)} como referência final.
+              Visualização fechada em {formatMesRef(mesRefCustom)}.
             </span>
           )}
+          <span className="text-[10px] text-slate-500 mt-1">
+            Esse filtro ajusta apenas o período visual do dashboard.
+          </span>
         </div>
 
         {/* ======================= */}

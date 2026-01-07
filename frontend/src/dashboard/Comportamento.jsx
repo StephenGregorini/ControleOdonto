@@ -93,7 +93,7 @@ export default function Comportamento() {
       {/* KPIs */}
       <div className="grid md:grid-cols-4 gap-4">
         <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-4">
-          <p className="text-slate-400 text-xs">Inadimplência (período)</p>
+          <p className="text-slate-400 text-xs">Inadimplência real (período)</p>
           <h3 className="text-2xl font-semibold text-rose-300">
             {formatPercent(k.inadimplencia_media_periodo)}
           </h3>
@@ -176,7 +176,7 @@ export default function Comportamento() {
                   dataKey="inad"
                   stroke={chartColors.inad}
                   strokeWidth={2}
-                  name="Inadimplência"
+                  name="Inadimplência real"
                 >
                   <LabelList dataKey="inad" position="top" formatter={(v) => formatPercent(v)} style={{ fontSize: 10, fill: chartColors.inad }} />
                 </Line>

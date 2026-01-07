@@ -11,7 +11,6 @@ export default function Overview() {
   if (!dados) return null;
 
   const k = dados.kpis || {};
-  const contexto = dados.contexto || {};
   const periodo = dados.filtros?.periodo || {};
 
   return (

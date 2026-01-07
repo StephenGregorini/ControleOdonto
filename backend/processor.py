@@ -171,15 +171,24 @@ def parse_block(title, header, rows):
         ])
 
     if "taxa de atraso" in tl:
-        return ("taxa_atraso_faixa", [
-            {
-                "mes_ref": normalize_mesref(r[0]),
-                "faixa": fix_faixa(r[1]),
-                "qtde": json_safe(r[2]),
-                "percentual": fix_percentual(r[3])
-            }
-            for r in rows
-        ])
+        dados = []
+        for r in rows:
+            if len(r) >= 4:
+                dados.append({
+                    "mes_ref": normalize_mesref(r[0]),
+                    "faixa": fix_faixa(r[1]),
+                    "qtde": json_safe(r[2]),
+                    "percentual": fix_percentual(r[3])
+                })
+            elif len(r) >= 2:
+                # Fallback: algumas planilhas trazem só MesRef + Taxa
+                dados.append({
+                    "mes_ref": normalize_mesref(r[0]),
+                    "faixa": "total",
+                    "qtde": None,
+                    "percentual": fix_percentual(r[1])
+                })
+        return ("taxa_atraso_faixa", dados)
 
     if "inadimpl" in tl:
         return ("inadimplencia", [

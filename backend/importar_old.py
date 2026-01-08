@@ -93,7 +93,7 @@ def supabase_upsert(table, data, conflict):
         return None
 
 
-def get_or_create_clinica(cnpj, external_id):
+def get_or_create_clinica(cnpj, codigo_clinica):
     url = f"{SUPABASE_URL}/rest/v1/clinicas?cnpj=eq.{cnpj}"
     r = requests.get(url, headers=HEADERS)
 
@@ -104,8 +104,8 @@ def get_or_create_clinica(cnpj, external_id):
 
     data = {
         "cnpj": cnpj,
-        "external_id": external_id,
-        "nome": external_id
+        "codigo_clinica": codigo_clinica,
+        "nome": codigo_clinica
     }
 
     resp = supabase_upsert("clinicas", data, "cnpj")
@@ -201,24 +201,24 @@ def parse_excel_from_bytes(contents: bytes):
 
     # Achar CNPJ
     cnpj = None
-    external_id = None
+    codigo_clinica = None
 
     for sheet in xls.sheet_names:
         df = xls.parse(sheet, header=None)
         if len(df) >= 2 and str(df.iloc[0, 0]).strip() == "CNPJ":
             cnpj = to_str(df.iloc[1, 0])
-            external_id = to_str(df.iloc[1, 1])
+            codigo_clinica = to_str(df.iloc[1, 1])
             break
 
     if cnpj is None:
         df0 = xls.parse(xls.sheet_names[0], header=None)
         cnpj = to_str(df0.iloc[1, 0])
-        external_id = to_str(df0.iloc[1, 1])
+        codigo_clinica = to_str(df0.iloc[1, 1])
 
     result = {
         "estabelecimento": {
             "cnpj": cnpj,
-            "external_id": external_id
+            "codigo_clinica": codigo_clinica
         },
         "boletos_emitidos": [],
         "taxa_pago_no_vencimento": [],
@@ -268,7 +268,7 @@ def processar_excel(contents: bytes):
 
     clinica_id = get_or_create_clinica(
         clinica["cnpj"],
-        clinica["external_id"]
+        clinica["codigo_clinica"]
     )
 
     # tabelas → conflito

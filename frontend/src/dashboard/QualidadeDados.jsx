@@ -32,7 +32,14 @@ export default function QualidadeDados() {
 
       {inconsistencias.map((clinica) => (
         <div key={clinica.clinica_id} className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-          <h3 className="font-semibold text-lg text-slate-100 mb-3">{clinica.clinica_nome}</h3>
+          <div className="mb-3">
+            <h3 className="font-semibold text-lg text-slate-100">
+              {clinica.clinica_codigo || clinica.clinica_nome}
+            </h3>
+            {clinica.clinica_nome_real && (
+              <p className="text-[11px] text-slate-400">{clinica.clinica_nome_real}</p>
+            )}
+          </div>
           <ul className="space-y-2">
             {clinica.inconsistencias.map((item, index) => (
               <li key={index} className="flex items-start gap-3 p-3 bg-slate-900/70 rounded-md border border-slate-700/50">

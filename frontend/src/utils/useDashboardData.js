@@ -15,10 +15,8 @@ async function fetchHistoricoLimites(clinicaId) {
 
 export function useDashboardData({
   clinicaId,
-  janelaMeses,
   inicio,
   fim,
-  mesRefCustom,        // 🔥 Agora vem por argumentos
 }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
@@ -36,7 +34,7 @@ export function useDashboardData({
         params.set("inicio", inicio);
         params.set("fim", fim);
       } else {
-        params.set("meses", janelaMeses || 12);
+        params.set("meses", 12);
       }
 
       // clinica
@@ -45,10 +43,6 @@ export function useDashboardData({
       }
 
       // 🔥 mês de referência forçado
-      if (mesRefCustom) {
-        params.set("mes_ref_custom", mesRefCustom);
-      }
-
       const url = `${API_BASE_URL}/dashboard?${params.toString()}`;
       const res = await fetch(url);
 
@@ -69,7 +63,7 @@ export function useDashboardData({
 
   useEffect(() => {
     carregar();
-  }, [clinicaId, janelaMeses, inicio, fim, mesRefCustom]);
+  }, [clinicaId, inicio, fim]);
 
   return {
     dados,

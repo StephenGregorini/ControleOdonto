@@ -24,7 +24,7 @@ export default function Carteira() {
             <thead>
               <tr className="text-slate-400 border-b border-slate-800">
                 <th className="py-2 pr-3 text-left">#</th>
-                <th className="py-2 pr-3 text-left">Clínica</th>
+                <th className="py-2 pr-3 text-left">Código</th>
                 <th className="py-2 pr-3 text-left">Score</th>
                 <th className="py-2 pr-3 text-left">Risco</th>
                 <th className="py-2 pr-3 text-left">Limite</th>
@@ -44,7 +44,21 @@ export default function Carteira() {
                   }}
                 >
                   <td className="py-2 pr-3 text-slate-500">{idx + 1}</td>
-                  <td className="py-2 pr-3 text-slate-100">{row.clinica_nome}</td>
+                  <td className="py-2 pr-3 text-slate-100">
+                    <div className="flex flex-col">
+                      <span>{row.clinica_codigo || row.clinica_nome}</span>
+                      {row.clinica_nome_real && (
+                        <span className="text-[11px] text-slate-500">
+                          {row.clinica_nome_real}
+                        </span>
+                      )}
+                      {row.cnpj && (
+                        <span className="text-[11px] text-slate-500">
+                          {row.cnpj}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-2 pr-3">
                     <span className="text-sky-300">
                       {row.score_credito?.toFixed(3)}

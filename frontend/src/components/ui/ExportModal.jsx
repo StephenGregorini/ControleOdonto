@@ -164,9 +164,27 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths, defaultClinic
   useEffect(() => {
     const lowerCaseSearch = clinicSearch.toLowerCase();
     setFilteredClinicas(
-      allClinicas.filter(c => c.nome.toLowerCase().includes(lowerCaseSearch))
+      allClinicas.filter((c) => {
+        const normalize = (txt) =>
+          String(txt || "")
+            .toLowerCase()
+            .replace(/[.\-\/\s]/g, "");
+        const target = `${c.nome || ""} ${c.cnpj || ""}`;
+        return (
+          target.toLowerCase().includes(lowerCaseSearch) ||
+          normalize(target).includes(normalize(clinicSearch))
+        );
+      })
     );
   }, [clinicSearch, allClinicas]);
+
+  const formatClinicaLabel = (clinica) => {
+    const codigo = clinica.codigo_clinica || clinica.nome || "";
+    const nome = clinica.nome || "";
+    const cnpj = clinica.cnpj || "";
+    const base = nome ? `${codigo} · ${nome}` : codigo;
+    return cnpj ? `${base} — ${cnpj}` : base;
+  };
 
 
   const handleColumnChange = (columnId) => {
@@ -225,7 +243,7 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths, defaultClinic
             <h3 className="text-lg font-semibold mb-3 text-sky-300">Quais clínicas incluir?</h3>
             <input 
               type="text"
-              placeholder="Buscar clínica..."
+              placeholder="Buscar código, nome ou CNPJ..."
               value={clinicSearch}
               onChange={(e) => setClinicSearch(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm mb-2"
@@ -244,7 +262,7 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths, defaultClinic
                     <Checkbox
                         key={c.id}
                         name={c.id}
-                        label={c.nome}
+                        label={formatClinicaLabel(c)}
                         checked={selectedClinicas.includes(c.id)}
                         onChange={() => handleClinicChange(c.id)}
                     />

@@ -1,18 +1,29 @@
 import os
+import asyncio
 import math
+import re
 from datetime import datetime, timedelta
 import pandas as pd
 import requests
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from processor import processar_excel
-from io import BytesIO
+from io import BytesIO, StringIO
 import csv
 from openpyxl import Workbook
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
+
+# ==========================
+# ENV LOADING
+# ==========================
+
+BASE_DIR = os.path.dirname(__file__)
+load_dotenv(os.path.join(BASE_DIR, "..", ".env"), override=False)
+load_dotenv(os.path.join(BASE_DIR, ".env.local"), override=True)
 
 # ==========================
 # CONFIG SUPABASE
@@ -20,6 +31,9 @@ from fastapi.responses import StreamingResponse
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+REDASH_BASE_URL = os.getenv("REDASH_BASE_URL")
+REDASH_API_KEY = os.getenv("REDASH_API_KEY")
+REDASH_QUERY_ID = os.getenv("REDASH_QUERY_ID") or "1501"
 
 if not SUPABASE_URL:
     raise RuntimeError("⚠️ Defina SUPABASE_URL no .env")
@@ -97,6 +111,8 @@ class DashboardFiltrosPeriodo(BaseModel):
 class DashboardContext(BaseModel):
     clinica_id: Optional[str] = None
     clinica_nome: Optional[str] = None
+    clinica_codigo: Optional[str] = None
+    clinica_nome_real: Optional[str] = None
     class Config:
         extra = "ignore"
 
@@ -152,6 +168,8 @@ class DashboardSeries(BaseModel):
 class DashboardRankingClinicas(BaseModel):
     clinica_id: Optional[str] = None
     clinica_nome: Optional[str] = None
+    clinica_codigo: Optional[str] = None
+    clinica_nome_real: Optional[str] = None
     cnpj: Optional[str] = None
     score_credito: Optional[float] = None
     categoria_risco: Optional[str] = None
@@ -194,6 +212,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+upload_lock = asyncio.Lock()
 
 @app.get("/")
 def read_root():
@@ -267,6 +287,39 @@ def supabase_get(table: str, select: str = "*", extra_params: dict | None = None
     return r.json()
 
 
+def supabase_get_all(
+    table: str,
+    select: str = "*",
+    extra_params: dict | None = None,
+    page_size: int = 1000,
+):
+    all_rows = []
+    offset = 0
+    while True:
+        params = {"select": select, "limit": str(page_size), "offset": str(offset)}
+        if extra_params:
+            params.update(extra_params)
+        r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}", headers=HEADERS, params=params)
+        if r.status_code not in (200, 206):
+            raise RuntimeError(f"Erro ao buscar {table}: {r.status_code} - {r.text}")
+        rows = r.json()
+        all_rows.extend(rows)
+        if len(rows) < page_size:
+            break
+        offset += page_size
+    return all_rows
+
+
+def supabase_delete(table: str, extra_params: dict | None = None):
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    params = {}
+    if extra_params:
+        params.update(extra_params)
+    r = requests.delete(url, headers=HEADERS, params=params)
+    if r.status_code not in (200, 204):
+        raise RuntimeError(f"Erro ao deletar {table}: {r.status_code} - {r.text}")
+
+
 def _parse_brl_number(value: str | None):
     if value is None:
         return None
@@ -280,13 +333,29 @@ def _parse_brl_number(value: str | None):
         return None
 
 
+def _parse_number_flexible(value: str | None):
+    if value is None:
+        return None
+    txt = str(value).strip()
+    if not txt:
+        return None
+    if "," in txt and "." in txt:
+        txt = txt.replace(".", "").replace(",", ".")
+    elif "," in txt:
+        txt = txt.replace(",", ".")
+    try:
+        return float(txt)
+    except Exception:
+        return None
+
+
 def _parse_date_br(value: str | None):
     if value is None:
         return None
     txt = str(value).strip()
     if not txt:
         return None
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
         try:
             return datetime.strptime(txt, fmt).date().isoformat()
         except Exception:
@@ -303,9 +372,15 @@ def _normalize_header(value: str):
     return (value or "").strip().lower()
 
 
+def _normalize_cnpj(value: str | None):
+    if value is None:
+        return ""
+    return re.sub(r"\D", "", str(value))
+
+
 def get_limite_utilizado_atual(clinica_id: str):
     try:
-        rows = supabase_get(
+        rows = supabase_get_all(
             "antecipacoes",
             select="valor_liquido,data_reembolso",
             extra_params={
@@ -367,9 +442,10 @@ async def upload_file(file: UploadFile = File(...)):
     Recebe um arquivo Excel (.xlsx), processa e insere os dados no Supabase.
     """
     try:
-        contents = await file.read()
-        resultado = processar_excel(contents, arquivo_nome=file.filename)
-        return resultado
+        async with upload_lock:
+            contents = await file.read()
+            resultado = processar_excel(contents, arquivo_nome=file.filename)
+            return resultado
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -413,7 +489,7 @@ async def listar_limites_clinica(clinica_id: str):
     do mais recente para o mais antigo.
     """
     try:
-        rows = supabase_get(
+        rows = supabase_get_all(
             "clinica_limite",
             select=(
                 "limite_aprovado,"
@@ -499,7 +575,7 @@ async def registrar_limite_utilizacao(clinica_id: str, payload: LimiteUtilizacao
 @app.get("/clinicas/{clinica_id}/limite_utilizacao")
 async def listar_limite_utilizacao(clinica_id: str):
     try:
-        rows = supabase_get(
+        rows = supabase_get_all(
             "limite_utilizacoes",
             select="valor_utilizado,data_referencia,criado_em,observacao,registrado_por",
             extra_params={
@@ -516,24 +592,24 @@ async def listar_limite_utilizacao(clinica_id: str):
 @app.get("/antecipacoes/resumo")
 async def resumo_antecipacoes(clinica_id: str | None = None):
     try:
-        antecipacoes = supabase_get(
+        antecipacoes = supabase_get_all(
             "antecipacoes",
             select="clinica_id,cnpj,valor_liquido,data_reembolso",
         )
-        limites = supabase_get(
+        limites = supabase_get_all(
             "clinica_limite",
             select="clinica_id,limite_aprovado,aprovado_em",
         )
-        clinicas_rows = supabase_get(
-            "vw_dashboard_final",
-            select="clinica_id,clinica_nome,cnpj",
+        clinicas_rows = supabase_get_all(
+            "clinicas",
+            select="id,codigo_clinica,nome,cnpj",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao carregar antecipações: {e}")
 
     df_ant = to_df(antecipacoes, ["clinica_id", "cnpj", "valor_liquido", "data_reembolso"])
     df_lim = to_df(limites, ["clinica_id", "limite_aprovado", "aprovado_em"])
-    df_clin = to_df(clinicas_rows, ["clinica_id", "clinica_nome", "cnpj"])
+    df_clin = to_df(clinicas_rows, ["id", "codigo_clinica", "nome", "cnpj"])
 
     if not df_lim.empty:
         df_lim["aprovado_em"] = pd.to_datetime(df_lim["aprovado_em"], errors="coerce")
@@ -549,8 +625,13 @@ async def resumo_antecipacoes(clinica_id: str | None = None):
     clinicas_map = {}
     if not df_clin.empty:
         for _, row in df_clin.iterrows():
-            clinicas_map[_safe_str(row.get("clinica_id"))] = {
-                "clinica_nome": _safe_str(row.get("clinica_nome")),
+            cid = _safe_str(row.get("id"))
+            if not cid:
+                continue
+            clinicas_map[cid] = {
+                "clinica_nome": _safe_str(row.get("codigo_clinica"))
+                or _safe_str(row.get("nome")),
+                "clinica_nome_real": _safe_str(row.get("nome")),
                 "cnpj": _safe_str(row.get("cnpj")),
             }
 
@@ -579,6 +660,7 @@ async def resumo_antecipacoes(clinica_id: str | None = None):
         resumo.append({
             "clinica_id": str(cid),
             "clinica_nome": clin_info.get("clinica_nome"),
+            "clinica_nome_real": clin_info.get("clinica_nome_real"),
             "cnpj": clin_info.get("cnpj"),
             "limite_aprovado": limite_aprovado,
             "total_antecipado": total_antecipado,
@@ -598,9 +680,9 @@ async def listar_antecipacoes(clinica_id: str | None = None):
         params = {"order": "data_antecipacao.desc"}
         if clinica_id:
             params["clinica_id"] = f"eq.{clinica_id}"
-        rows = supabase_get(
+        rows = supabase_get_all(
             "antecipacoes",
-            select="id,clinica_id,cnpj,data_antecipacao,valor_liquido,valor_taxa,valor_a_pagar,data_reembolso,observacao,registrado_por,criado_em",
+            select="id,clinica_id,cnpj,data_antecipacao,valor_liquido,valor_taxa,valor_a_pagar,data_reembolso,observacao,registrado_por,criado_em,redash_id",
             extra_params=params,
         )
     except Exception as e:
@@ -618,7 +700,7 @@ async def registrar_antecipacao(payload: AntecipacaoPayload):
         )
 
     try:
-        existentes = supabase_get(
+        existentes = supabase_get_all(
             "antecipacoes",
             select="valor_liquido,data_reembolso",
             extra_params={"clinica_id": f"eq.{payload.clinica_id}"},
@@ -698,14 +780,31 @@ async def importar_antecipacoes_csv(
         delimiter = ";" if ";" in first_line else ","
         reader = csv.DictReader(text.splitlines(), delimiter=delimiter)
 
-        clinicas_rows = supabase_get("clinicas", select="id,cnpj")
+        clinicas_rows = supabase_get_all("clinicas", select="id,cnpj,nome,codigo_clinica")
         clinicas_map = {
-            _safe_str(r.get("cnpj")): _safe_str(r.get("id"))
+            _normalize_cnpj(r.get("cnpj")): _safe_str(r.get("id"))
             for r in (clinicas_rows or [])
             if r.get("cnpj") and r.get("id")
         }
+        clinicas_nome_map = {
+            _safe_str(r.get("id")): _safe_str(r.get("codigo_clinica"))
+            or _safe_str(r.get("nome"))
+            for r in (clinicas_rows or [])
+            if r.get("id")
+        }
+        clinicas_nome_real_map = {
+            _safe_str(r.get("id")): _safe_str(r.get("nome"))
+            for r in (clinicas_rows or [])
+            if r.get("id")
+        }
+        clinicas_cnpj_map = {
+            _safe_str(r.get("id")): _safe_str(r.get("cnpj"))
+            for r in (clinicas_rows or [])
+            if r.get("id") and r.get("cnpj")
+        }
 
         rows = list(reader)
+        total_rows = len(rows)
         if not rows:
             raise HTTPException(status_code=400, detail="CSV vazio ou inválido.")
 
@@ -726,16 +825,18 @@ async def importar_antecipacoes_csv(
         skipped = 0
 
         clinica_ids = set()
+        clinica_counts = {}
         min_date = None
         max_date = None
         for idx, row in enumerate(rows, start=2):
-            cnpj = (get_value(row, ["cnpj"]) or "").strip()
+            cnpj = _normalize_cnpj(get_value(row, ["cnpj"]))
             clinica_id = clinicas_map.get(cnpj)
             if not clinica_id:
                 skipped += 1
                 errors.append({"linha": idx, "cnpj": cnpj, "erro": "CNPJ não encontrado"})
                 continue
             clinica_ids.add(clinica_id)
+            clinica_counts[clinica_id] = clinica_counts.get(clinica_id, 0) + 1
             data_antecipacao = _parse_date_br(
                 get_value(row, ["data antecipação", "data antecipacao", "data"])
             )
@@ -755,7 +856,7 @@ async def importar_antecipacoes_csv(
         if clinica_ids:
             ids_in = ",".join(sorted(clinica_ids))
 
-            limite_rows = supabase_get(
+            limite_rows = supabase_get_all(
                 "clinica_limite",
                 select="clinica_id,limite_aprovado,aprovado_em",
                 extra_params={"clinica_id": f"in.({ids_in})", "order": "aprovado_em.desc"},
@@ -765,7 +866,29 @@ async def importar_antecipacoes_csv(
                 if cid and cid not in limites_map:
                     limites_map[cid] = _safe_float(row.get("limite_aprovado"))
 
-            antecipacoes_rows = supabase_get(
+            if not force:
+                missing_clinicas = []
+                for cid in sorted(clinica_ids):
+                    if limites_map.get(cid) is None:
+                        missing_clinicas.append(
+                            {
+                                "clinica_id": cid,
+                                "clinica_nome": clinicas_nome_map.get(cid),
+                                "clinica_nome_real": clinicas_nome_real_map.get(cid),
+                                "cnpj": clinicas_cnpj_map.get(cid),
+                                "linhas": clinica_counts.get(cid, 0),
+                            }
+                        )
+                if missing_clinicas:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "message": "Existem clínicas no CSV sem limite aprovado. Aprove o limite antes de importar.",
+                            "missing_clinicas": missing_clinicas,
+                        },
+                    )
+
+            antecipacoes_rows = supabase_get_all(
                 "antecipacoes",
                 select="clinica_id,valor_liquido,data_reembolso",
                 extra_params={"clinica_id": f"in.({ids_in})"},
@@ -792,7 +915,7 @@ async def importar_antecipacoes_csv(
                 existente_params["and"] = (
                     f"(data_antecipacao.gte.{min_date},data_antecipacao.lte.{max_date})"
                 )
-            existente_rows = supabase_get(
+            existente_rows = supabase_get_all(
                 "antecipacoes",
                 select="clinica_id,data_antecipacao,valor_liquido,valor_taxa,valor_a_pagar,data_reembolso",
                 extra_params=existente_params,
@@ -836,7 +959,7 @@ async def importar_antecipacoes_csv(
                 )
 
         for idx, row in enumerate(rows, start=2):
-            cnpj = (get_value(row, ["cnpj"]) or "").strip()
+            cnpj = _normalize_cnpj(get_value(row, ["cnpj"]))
             clinica_id = clinicas_map.get(cnpj)
             if not clinica_id:
                 continue
@@ -912,6 +1035,7 @@ async def importar_antecipacoes_csv(
 
         return {
             "ok": True,
+            "total_rows": total_rows,
             "inserted": inserted,
             "skipped": skipped,
             "errors": errors[:20],
@@ -921,6 +1045,406 @@ async def importar_antecipacoes_csv(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao importar CSV: {e}")
 
+
+@app.post("/antecipacoes/import-redash")
+async def importar_antecipacoes_redash(
+    force: bool = False,
+    replace: bool = False,
+    registered_by: str | None = None,
+):
+    if not REDASH_BASE_URL or not REDASH_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Defina REDASH_BASE_URL e REDASH_API_KEY no ambiente.",
+        )
+
+    url = f"{REDASH_BASE_URL.rstrip('/')}/api/queries/{REDASH_QUERY_ID}/results.csv"
+    try:
+        r = requests.get(url, params={"api_key": REDASH_API_KEY}, timeout=30)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao acessar Redash: {e}")
+    if r.status_code != 200:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao acessar Redash: {r.status_code} - {r.text}",
+        )
+
+    text = r.text or ""
+    first_line = text.splitlines()[0] if text else ""
+    delimiter = ";" if ";" in first_line else ","
+    reader = csv.DictReader(StringIO(text), delimiter=delimiter)
+    rows = list(reader)
+    total_rows = len(rows)
+    if not rows:
+        raise HTTPException(status_code=400, detail="CSV do Redash vazio.")
+
+    header_map = {}
+    if reader.fieldnames:
+        for field in reader.fieldnames:
+            header_map[_normalize_header(field)] = field
+
+    def get_value(row, options):
+        for opt in options:
+            key = header_map.get(_normalize_header(opt))
+            if key and key in row:
+                return row.get(key)
+        return None
+
+    clinicas_rows = supabase_get_all("clinicas", select="id,cnpj,nome,codigo_clinica")
+    cnpj_to_ids = {}
+    for row in clinicas_rows or []:
+        cnpj_norm = _normalize_cnpj(row.get("cnpj"))
+        cid = _safe_str(row.get("id"))
+        if not cnpj_norm or not cid:
+            continue
+        cnpj_to_ids.setdefault(cnpj_norm, []).append(cid)
+
+    dup_cnpjs = [
+        {"cnpj": cnpj, "clinica_ids": ids}
+        for cnpj, ids in cnpj_to_ids.items()
+        if len(ids) > 1
+    ]
+    if dup_cnpjs:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Existem CNPJs duplicados na tabela de clínicas. Corrija para importar corretamente.",
+                "duplicados": dup_cnpjs[:20],
+            },
+        )
+
+    clinicas_map = {cnpj: ids[0] for cnpj, ids in cnpj_to_ids.items()}
+    clinicas_nome_map = {
+        _safe_str(r.get("id")): _safe_str(r.get("codigo_clinica")) or _safe_str(r.get("nome"))
+        for r in (clinicas_rows or [])
+        if r.get("id")
+    }
+    clinicas_nome_real_map = {
+        _safe_str(r.get("id")): _safe_str(r.get("nome"))
+        for r in (clinicas_rows or [])
+        if r.get("id")
+    }
+    clinicas_cnpj_map = {
+        _safe_str(r.get("id")): _safe_str(r.get("cnpj"))
+        for r in (clinicas_rows or [])
+        if r.get("id") and r.get("cnpj")
+    }
+
+    payloads = []
+    errors = []
+    skipped = 0
+    clinica_ids = set()
+    clinica_counts = {}
+    min_date = None
+    max_date = None
+
+    for idx, row in enumerate(rows, start=2):
+        cnpj = _normalize_cnpj(get_value(row, ["cnpj"]))
+        clinica_id = clinicas_map.get(cnpj)
+        if not clinica_id:
+            skipped += 1
+            errors.append({"linha": idx, "cnpj": cnpj, "erro": "CNPJ não encontrado"})
+            continue
+        expected_cnpj = _normalize_cnpj(clinicas_cnpj_map.get(clinica_id))
+        if expected_cnpj and expected_cnpj != cnpj:
+            skipped += 1
+            errors.append(
+                {
+                    "linha": idx,
+                    "cnpj": cnpj,
+                    "erro": f"CNPJ não confere com clínica ({clinica_id})",
+                }
+            )
+            continue
+        clinica_ids.add(clinica_id)
+        clinica_counts[clinica_id] = clinica_counts.get(clinica_id, 0) + 1
+        data_antecipacao = _parse_date_br(
+            get_value(row, ["data antecipação", "data antecipacao", "data"])
+        )
+        if data_antecipacao:
+            try:
+                data_obj = datetime.fromisoformat(data_antecipacao).date()
+                if not min_date or data_obj < min_date:
+                    min_date = data_obj
+                if not max_date or data_obj > max_date:
+                    max_date = data_obj
+            except Exception:
+                pass
+
+    limites_map = {}
+    aberto_map = {}
+    existing_keys = set()
+    existing_redash_refs = set()
+    make_dup_key = None
+    if clinica_ids:
+        ids_in = ",".join(sorted(clinica_ids))
+        limite_rows = supabase_get_all(
+            "clinica_limite",
+            select="clinica_id,limite_aprovado,aprovado_em",
+            extra_params={"clinica_id": f"in.({ids_in})", "order": "aprovado_em.desc"},
+        )
+        for row in limite_rows or []:
+            cid = _safe_str(row.get("clinica_id"))
+            if cid and cid not in limites_map:
+                limites_map[cid] = _safe_float(row.get("limite_aprovado"))
+
+        if not force:
+            missing_clinicas = []
+            for cid in sorted(clinica_ids):
+                if limites_map.get(cid) is None:
+                    missing_clinicas.append(
+                        {
+                            "clinica_id": cid,
+                            "clinica_nome": clinicas_nome_map.get(cid),
+                            "clinica_nome_real": clinicas_nome_real_map.get(cid),
+                            "cnpj": clinicas_cnpj_map.get(cid),
+                            "linhas": clinica_counts.get(cid, 0),
+                        }
+                    )
+            if missing_clinicas:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "message": "Existem clínicas no Redash sem limite aprovado. Aprove o limite antes de importar.",
+                        "missing_clinicas": missing_clinicas,
+                    },
+                )
+
+        if replace:
+            supabase_delete(
+                "antecipacoes",
+                extra_params={
+                    "or": "(registrado_por.eq.import_redash,redash_id.not.is.null,observacao.like.redash:%)"
+                },
+            )
+
+        antecipacoes_rows = supabase_get_all(
+            "antecipacoes",
+            select="clinica_id,valor_liquido,data_reembolso",
+            extra_params={"clinica_id": f"in.({ids_in})"},
+        )
+        df_ant = to_df(
+            antecipacoes_rows, ["clinica_id", "valor_liquido", "data_reembolso"]
+        )
+        if not df_ant.empty:
+            df_ant["valor_liquido"] = pd.to_numeric(
+                df_ant["valor_liquido"], errors="coerce"
+            ).fillna(0)
+            df_ant["reembolsado"] = df_ant["data_reembolso"].notna()
+            for cid, group in df_ant.groupby("clinica_id"):
+                total_antecipado = float(group["valor_liquido"].sum())
+                total_reembolsado = float(
+                    group[group["reembolsado"]]["valor_liquido"].sum()
+                )
+                aberto_map[_safe_str(cid)] = max(
+                    total_antecipado - total_reembolsado, 0.0
+                )
+
+        if not replace:
+            existente_params = {"clinica_id": f"in.({ids_in})"}
+            if min_date and max_date:
+                existente_params["and"] = (
+                    f"(data_antecipacao.gte.{min_date},data_antecipacao.lte.{max_date})"
+                )
+            existente_rows = supabase_get_all(
+                "antecipacoes",
+                select=(
+                    "clinica_id,data_antecipacao,valor_liquido,valor_taxa,valor_a_pagar,"
+                    "data_reembolso,observacao,redash_id"
+                ),
+                extra_params=existente_params,
+            )
+
+            def make_dup_key(
+                clinica_id_val,
+                data_val,
+                valor_liq_val,
+                valor_taxa_val,
+                valor_pagar_val,
+                data_reemb_val,
+            ):
+                def num(v):
+                    f = _safe_float(v)
+                    if f is None:
+                        return "0.00"
+                    return f"{round(f, 2):.2f}"
+
+                return "|".join(
+                    [
+                        _safe_str(clinica_id_val) or "",
+                        _safe_str(data_val) or "",
+                        num(valor_liq_val),
+                        num(valor_taxa_val),
+                        num(valor_pagar_val),
+                        _safe_str(data_reemb_val) or "",
+                    ]
+                )
+
+            for row in existente_rows or []:
+                existing_keys.add(
+                    make_dup_key(
+                        row.get("clinica_id"),
+                        row.get("data_antecipacao"),
+                        row.get("valor_liquido"),
+                        row.get("valor_taxa"),
+                        row.get("valor_a_pagar"),
+                        row.get("data_reembolso"),
+                    )
+                )
+                redash_id = _safe_str(row.get("redash_id"))
+                if redash_id:
+                    existing_redash_refs.add(redash_id)
+                else:
+                    obs = _safe_str(row.get("observacao"))
+                    if obs.startswith("redash:"):
+                        existing_redash_refs.add(obs.split("redash:", 1)[-1])
+
+    for idx, row in enumerate(rows, start=2):
+        cnpj = _normalize_cnpj(get_value(row, ["cnpj"]))
+        clinica_id = clinicas_map.get(cnpj)
+        if not clinica_id:
+            continue
+        expected_cnpj = _normalize_cnpj(clinicas_cnpj_map.get(clinica_id))
+        if expected_cnpj and expected_cnpj != cnpj:
+            skipped += 1
+            errors.append(
+                {
+                    "linha": idx,
+                    "cnpj": cnpj,
+                    "erro": f"CNPJ não confere com clínica ({clinica_id})",
+                }
+            )
+            continue
+
+        data_antecipacao = _parse_date_br(
+            get_value(row, ["data antecipação", "data antecipacao", "data"])
+        )
+        data_reembolso = _parse_date_br(get_value(row, ["data reembolso"]))
+        valor_liquido = _parse_number_flexible(
+            get_value(row, ["moneydetails_net", "moneydetails net", "moneydetails_net"])
+        )
+        valor_taxa = _parse_number_flexible(
+            get_value(row, ["moneydetails_fee", "moneydetails fee", "moneydetails_fee"])
+        )
+        valor_a_pagar = _parse_number_flexible(
+            get_value(
+                row,
+                ["moneydetails_tobepaid", "moneydetails to be paid", "moneydetails_tobepaid"],
+            )
+        )
+        redash_ref = _safe_str(
+            get_value(row, ["id antecipação", "id antecipacao", "requestid", "receita_id"])
+        )
+
+        if valor_liquido is None or valor_liquido <= 0:
+            skipped += 1
+            errors.append({"linha": idx, "cnpj": cnpj, "erro": "Valor líquido inválido"})
+            continue
+
+        if not replace:
+            if redash_ref:
+                if redash_ref in existing_redash_refs:
+                    skipped += 1
+                    errors.append(
+                        {
+                            "linha": idx,
+                            "cnpj": cnpj,
+                            "redash_id": redash_ref,
+                            "erro": "Duplicado (Redash)",
+                        }
+                    )
+                    continue
+                existing_redash_refs.add(redash_ref)
+            else:
+                dup_key = make_dup_key(
+                    clinica_id,
+                    data_antecipacao,
+                    valor_liquido,
+                    valor_taxa,
+                    valor_a_pagar,
+                    data_reembolso,
+                )
+                if dup_key in existing_keys:
+                    skipped += 1
+                    errors.append(
+                        {
+                            "linha": idx,
+                            "cnpj": cnpj,
+                            "redash_id": redash_ref,
+                            "erro": "Duplicado",
+                        }
+                    )
+                    continue
+                existing_keys.add(dup_key)
+
+        if not force:
+            limite_aprovado = limites_map.get(clinica_id)
+            if limite_aprovado is None:
+                skipped += 1
+                errors.append({"linha": idx, "cnpj": cnpj, "erro": "Sem limite aprovado"})
+                continue
+            aberto_atual = aberto_map.get(clinica_id, 0.0)
+            saldo = max(limite_aprovado - aberto_atual, 0.0)
+            if valor_liquido > saldo and not data_reembolso:
+                skipped += 1
+                errors.append({"linha": idx, "cnpj": cnpj, "erro": "Excede saldo antecipável"})
+                continue
+            if not data_reembolso:
+                aberto_map[clinica_id] = aberto_atual + valor_liquido
+
+        observacao = f"redash:{redash_ref}" if redash_ref else "redash"
+        payloads.append(
+            {
+                "clinica_id": clinica_id,
+                "cnpj": cnpj,
+                "data_antecipacao": data_antecipacao or datetime.utcnow().date().isoformat(),
+                "valor_liquido": valor_liquido,
+                "valor_taxa": valor_taxa,
+                "valor_a_pagar": valor_a_pagar,
+                "data_reembolso": data_reembolso,
+                "redash_id": redash_ref or None,
+                "observacao": observacao,
+                "registrado_por": registered_by or "import_redash",
+            }
+        )
+
+    inserted = 0
+    chunk_size = 500
+    for i in range(0, len(payloads), chunk_size):
+        chunk = payloads[i : i + chunk_size]
+        supabase_post("antecipacoes", chunk)
+        inserted += len(chunk)
+
+    return {
+        "ok": True,
+        "total_rows": total_rows,
+        "inserted": inserted,
+        "skipped": skipped,
+        "errors": errors[:20],
+    }
+
+
+@app.get("/antecipacoes/redash-status")
+async def antecipacoes_redash_status():
+    try:
+        rows = supabase_get(
+            "antecipacoes",
+            select="criado_em",
+            extra_params={
+                "registrado_por": "eq.import_redash",
+                "order": "criado_em.desc",
+                "limit": "1",
+            },
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao consultar status do Redash: {e}",
+        )
+    last_sync = None
+    if rows:
+        last_sync = rows[0].get("criado_em")
+    return {"last_sync": last_sync}
 
 
 
@@ -936,11 +1460,11 @@ async def listar_historico():
 
     # 1) Buscar importações + clínica
     try:
-        importacoes = supabase_get(
+        importacoes = supabase_get_all(
             "importacoes",
             select=(
                 "id,clinica_id,arquivo_nome,total_linhas,status,criado_em,"
-                "clinicas:clinica_id(id,nome,cnpj,external_id)"
+                "clinicas:clinica_id(id,nome,codigo_clinica,cnpj)"
             ),
             extra_params={"order": "criado_em.desc"},
         )
@@ -966,7 +1490,7 @@ async def listar_historico():
 
         # 2.1 Boletos emitidos
         try:
-            boletos_rows = supabase_get(
+            boletos_rows = supabase_get_all(
                 "boletos_emitidos",
                 select="clinica_id,qtde",
                 extra_params={"clinica_id": f"in.({ids_in})"},
@@ -990,7 +1514,7 @@ async def listar_historico():
 
         # 2.2 Inadimplência REAL
         try:
-            dash_rows = supabase_get(
+            dash_rows = supabase_get_all(
                 "vw_dashboard_final",
                 select="clinica_id,mes_ref_date,valor_total_emitido,taxa_pago_no_vencimento,taxa_inadimplencia",
                 extra_params={"clinica_id": f"in.({ids_in})"},
@@ -1088,13 +1612,13 @@ async def dashboard_resumo_geral():
 
     try:
         # --- Tabelas base ---
-        boletos_rows = supabase_get(
+        boletos_rows = supabase_get_all(
             "boletos_emitidos", select="clinica_id,mes_ref,qtde,valor_total"
         )
-        inad_rows = supabase_get("inadimplencia", select="clinica_id,mes_ref,taxa")
-        taxa_venc_rows = supabase_get("taxa_pago_no_vencimento", select="clinica_id,mes_ref,taxa")
-        tempo_rows = supabase_get("tempo_medio_pagamento", select="clinica_id,mes_ref,dias")
-        ticket_rows = supabase_get("valor_medio_boleto", select="clinica_id,mes_ref,valor")
+        inad_rows = supabase_get_all("inadimplencia", select="clinica_id,mes_ref,taxa")
+        taxa_venc_rows = supabase_get_all("taxa_pago_no_vencimento", select="clinica_id,mes_ref,taxa")
+        tempo_rows = supabase_get_all("tempo_medio_pagamento", select="clinica_id,mes_ref,dias")
+        ticket_rows = supabase_get_all("valor_medio_boleto", select="clinica_id,mes_ref,valor")
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Erro ao carregar dados do Supabase: {e}"
@@ -1400,9 +1924,9 @@ async def listar_clinicas_dashboard():
     para uso no filtro do dashboard de crédito & risco.
     """
     try:
-        rows = supabase_get(
+        rows = supabase_get_all(
             "vw_dashboard_final",
-            select="clinica_id,clinica_nome,cnpj,external_id",
+            select="clinica_id,clinica_nome,cnpj",
         )
     except Exception as e:
         raise HTTPException(
@@ -1412,7 +1936,7 @@ async def listar_clinicas_dashboard():
 
     df = to_df(
         rows,
-        columns=["clinica_id", "clinica_nome", "cnpj", "external_id"],
+        columns=["clinica_id", "clinica_nome", "cnpj"],
     )
 
     if df.empty:
@@ -1421,19 +1945,38 @@ async def listar_clinicas_dashboard():
     df = df.drop_duplicates(subset=["clinica_id"])
 
     clinicas = []
+    clinicas_info_map = {}
+    try:
+        clinicas_rows = supabase_get_all(
+            "clinicas",
+            select="id,cnpj,nome,codigo_clinica",
+        )
+        for row in clinicas_rows or []:
+            cid = _safe_str(row.get("id"))
+            if not cid:
+                continue
+            clinicas_info_map[cid] = {
+                "codigo_clinica": _safe_str(row.get("codigo_clinica")) or _safe_str(row.get("nome")),
+                "nome": _safe_str(row.get("nome")),
+                "cnpj": _safe_str(row.get("cnpj")),
+            }
+    except Exception:
+        clinicas_info_map = {}
     for _, row in df.iterrows():
+        cid = _safe_str(row.get("clinica_id"))
+        info = clinicas_info_map.get(cid, {})
         clinicas.append(
             {
-                "id": _safe_str(row.get("clinica_id")),
-                "nome": _safe_str(row.get("clinica_nome"))
-                or _safe_str(row.get("external_id"))
+                "id": cid,
+                "nome": info.get("nome"),
+                "codigo_clinica": info.get("codigo_clinica")
+                or _safe_str(row.get("clinica_nome"))
                 or _safe_str(row.get("cnpj")),
-                "cnpj": _safe_str(row.get("cnpj")),
-                "external_id": _safe_str(row.get("external_id")),
+                "cnpj": info.get("cnpj") or _safe_str(row.get("cnpj")),
             }
         )
 
-    clinicas = sorted(clinicas, key=lambda x: (x["nome"] or "").lower())
+    clinicas = sorted(clinicas, key=lambda x: (x.get("codigo_clinica") or "").lower())
     return clinicas
 
 
@@ -1567,7 +2110,7 @@ async def dashboard_completo(
     mes_ref_custom: str | None = None,
 ):
     try:
-        rows = supabase_get("vw_dashboard_final", select="*")
+        rows = supabase_get_all("vw_dashboard_final", select="*")
         df = to_df(rows)
         if df.empty:
             return {"filtros": {}, "contexto": {}, "kpis": {}, "series": {}, "ranking_clinicas": []}
@@ -1593,7 +2136,7 @@ async def dashboard_completo(
         min_dt, max_dt = df["mes_ref_date"].min(), df["mes_ref_date"].max()
 
         try:
-            importacoes_rows = supabase_get(
+            importacoes_rows = supabase_get_all(
                 "importacoes",
                 select="clinica_id,criado_em",
             )
@@ -1601,8 +2144,26 @@ async def dashboard_completo(
             importacoes_rows = []
         df_importacoes = to_df(importacoes_rows, ["clinica_id", "criado_em"])
 
+        clinicas_info_map = {}
         try:
-            antecipacoes_rows = supabase_get(
+            clinicas_rows = supabase_get_all(
+                "clinicas",
+                select="id,cnpj,nome,codigo_clinica",
+            )
+        except Exception:
+            clinicas_rows = []
+        for row in clinicas_rows or []:
+            cid = _safe_str(row.get("id"))
+            if not cid:
+                continue
+            clinicas_info_map[cid] = {
+                "codigo_clinica": _safe_str(row.get("codigo_clinica")) or _safe_str(row.get("nome")),
+                "nome": _safe_str(row.get("nome")),
+                "cnpj": _safe_str(row.get("cnpj")),
+            }
+
+        try:
+            antecipacoes_rows = supabase_get_all(
                 "antecipacoes",
                 select="clinica_id,valor_liquido,data_reembolso",
             )
@@ -1681,9 +2242,14 @@ async def dashboard_completo(
             df_recorte_all = df_recorte_all.copy()
 
         nome_clinica = "Todas as clínicas"
+        codigo_clinica = None
+        nome_real = None
         if clinica_id:
             nomes = df[df["clinica_id"] == clinica_id]["clinica_nome"].dropna().unique().tolist()
             nome_clinica = nomes[0] if nomes else "Clínica selecionada"
+            info = clinicas_info_map.get(str(clinica_id), {})
+            codigo_clinica = info.get("codigo_clinica") or nome_clinica
+            nome_real = info.get("nome")
         
         if clinica_id:
             df_ctx = df_recorte_all[df_recorte_all["clinica_id"] == clinica_id].copy()
@@ -1871,9 +2437,12 @@ async def dashboard_completo(
             if pd.isna(cutoff_rank) or cutoff_rank > max_dt:
                 cutoff_rank = max_dt
             (limite_sugerido_rank, _, _, _, _, _, _) = _calculate_limite_sugerido(cid, df, cutoff_rank)
+            info = clinicas_info_map.get(cid, {})
             ranking_data.append({
                 "clinica_id": cid,
                 "clinica_nome": _safe_str(row.get("clinica_nome")),
+                "clinica_codigo": info.get("codigo_clinica") or _safe_str(row.get("clinica_nome")),
+                "clinica_nome_real": info.get("nome"),
                 "cnpj": _safe_str(row.get("cnpj")),
                 "score_credito": _safe_float(df_clin_ultimo["score_ajustado"].mean()),
                 "categoria_risco": _categoria_from_score(_safe_float(df_clin_ultimo["score_ajustado"].mean())),
@@ -1921,7 +2490,12 @@ async def dashboard_completo(
                     "todos_meses": sorted({_format_mes_ref(m) for m in df["mes_ref_date"].unique() if m is not None}),
                 }
             },
-            "contexto": {"clinica_id": clinica_id, "clinica_nome": nome_clinica},
+            "contexto": {
+                "clinica_id": clinica_id,
+                "clinica_nome": nome_clinica,
+                "clinica_codigo": codigo_clinica,
+                "clinica_nome_real": nome_real,
+            },
             "kpis": kpis,
             "series": series_data,
             "ranking_clinicas": ranking_data,
@@ -1934,10 +2508,10 @@ async def dashboard_completo(
 
 async def _generate_export_df(payload: ExportPayload) -> pd.DataFrame:
     try:
-        rows = supabase_get("vw_dashboard_final", select="*")
+        rows = supabase_get_all("vw_dashboard_final", select="*")
         df = to_df(rows)
         if df.empty: return pd.DataFrame()
-        importacoes_rows = supabase_get(
+        importacoes_rows = supabase_get_all(
             "importacoes",
             select="clinica_id,criado_em",
         )

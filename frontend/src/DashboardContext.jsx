@@ -14,10 +14,8 @@ export function DashboardProvider({ children }) {
   // 🔥 CORREÇÃO AQUI — começar como "todas"
   const [clinicaId, setClinicaId] = useState("todas");
 
-  const [janelaMeses, setJanelaMeses] = useState(12);
   const [periodoInicio, setPeriodoInicio] = useState("");
   const [periodoFim, setPeriodoFim] = useState("");
-  const [mesRefCustom, setMesRefCustom] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -34,10 +32,8 @@ export function DashboardProvider({ children }) {
     reload: reloadDashboard,
   } = useDashboardData({
     clinicaId,
-    janelaMeses,
     inicio: periodoInicio,
     fim: periodoFim,
-    mesRefCustom,
   });
 
   const [panelLimiteAberto, setPanelLimiteAberto] = useState(false);
@@ -51,8 +47,6 @@ export function DashboardProvider({ children }) {
     clinicaId,
     setClinicaId,
 
-    janelaMeses,
-    setJanelaMeses,
     periodoInicio,
     setPeriodoInicio,
     periodoFim,
@@ -69,8 +63,6 @@ export function DashboardProvider({ children }) {
     activeTab,
     setActiveTab,
     
-    mesRefCustom,
-    setMesRefCustom,
   };
 
 

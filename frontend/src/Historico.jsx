@@ -47,9 +47,18 @@ export default function Historico() {
                 className="rounded-2xl bg-slate-900/70 border border-slate-800 p-5"
               >
                 <div className="flex justify-between items-center mb-2">
-                  <h2 className="text-slate-100 font-semibold text-sm sm:text-base">
-                    {item.clinicas?.nome || "Clínica não encontrada"}
-                  </h2>
+                  <div className="flex flex-col">
+                    <h2 className="text-slate-100 font-semibold text-sm sm:text-base">
+                      {item.clinicas?.codigo_clinica ||
+                        item.clinicas?.nome ||
+                        "Clínica não encontrada"}
+                    </h2>
+                    {item.clinicas?.nome && (
+                      <span className="text-[11px] text-slate-400">
+                        {item.clinicas.nome}
+                      </span>
+                    )}
+                  </div>
 
                   <span className="text-[11px] bg-slate-800 text-slate-300 rounded-full px-2 py-1">
                     {new Date(item.criado_em).toLocaleString("pt-BR")}

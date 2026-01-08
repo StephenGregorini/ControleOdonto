@@ -138,6 +138,9 @@
   html.theme-light .text-emerald-100 {
     color: #047857 !important;
   }
+  html.theme-light .text-rose-100 {
+    color: #9f1239 !important;
+  }
   html.theme-light .text-rose-300 {
     color: #e11d48 !important;
   }

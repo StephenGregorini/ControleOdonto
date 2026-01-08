@@ -1,14 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useDashboard } from "../DashboardContext";
 import Card from "../components/ui/Card";
 import Select from "../components/ui/Select";
-import { MESES } from "../utils/theme";
 import { formatMesRef } from "../utils/formatters";
-
-const ANOS = Array.from({ length: 5 }, (_, i) =>
-  String(new Date().getFullYear() - i)
-);
 
 export default function DashboardFilters() {
   const {
@@ -16,27 +11,14 @@ export default function DashboardFilters() {
     loadingClinicas,
     clinicaId,
     setClinicaId,
-    janelaMeses,
-    setJanelaMeses,
     periodoInicio,
     setPeriodoInicio,
     periodoFim,
     setPeriodoFim,
     dados,
-    mesRefCustom,
-    setMesRefCustom,
   } = useDashboard();
 
   const navigate = useNavigate();
-
-  const [allMonths, setAllMonths] = useState([]);
-
-  useEffect(() => {
-    const months = dados?.filtros?.periodo?.todos_meses || [];
-    if (months.length > allMonths.length) {
-      setAllMonths(months);
-    }
-  }, [dados, allMonths]);
 
   const handleClinicaChange = (newClinicaId) => {
     setClinicaId(newClinicaId);
@@ -46,12 +28,13 @@ export default function DashboardFilters() {
   };
 
   const listaClinicas = Array.isArray(clinicas) ? clinicas : [];
-
-  const inicioAno = periodoInicio?.split("-")[0] ?? "";
-  const inicioMes = periodoInicio?.split("-")[1] ?? "";
-
-  const fimAno = periodoFim?.split("-")[0] ?? "";
-  const fimMes = periodoFim?.split("-")[1] ?? "";
+  const formatClinicaLabel = (clinica) => {
+    const codigo = clinica.codigo_clinica || clinica.nome || "";
+    const nome = clinica.nome || "";
+    const cnpj = clinica.cnpj || "";
+    const base = nome ? `${codigo} · ${nome}` : codigo;
+    return cnpj ? `${base} — ${cnpj}` : base;
+  };
 
   const periodoCustom = !!(periodoInicio && periodoFim);
 
@@ -103,17 +86,19 @@ export default function DashboardFilters() {
         {/* ======================= */}
         <div className="flex flex-col gap-1">
           <span className="text-[11px] uppercase tracking-wide text-slate-500">
-            Clínica
+            Código da clínica
           </span>
 
           <Select
             value={clinicaId ?? "todas"}
             onChange={handleClinicaChange}
             loading={loadingClinicas}
+            searchable
+            searchPlaceholder="Buscar código, nome ou CNPJ..."
             options={[
               { label: "Todas as clínicas", value: "todas" },
               ...listaClinicas.map((c) => ({
-                label: c.nome,
+                label: formatClinicaLabel(c),
                 value: c.id,
               })),
             ]}
@@ -125,125 +110,37 @@ export default function DashboardFilters() {
         </div>
 
         {/* ======================= */}
-        {/* JANELA TEMPORAL */}
-        {/* ======================= */}
-        <div className="flex flex-col gap-1">
-          <span className="text-[11px] uppercase tracking-wide text-slate-500">
-            Janela móvel
-          </span>
-
-          <Select
-            disabled={periodoCustom}
-            value={janelaMeses}
-            onChange={setJanelaMeses}
-            options={[
-              { label: "Últimos 6 meses", value: 6 },
-              { label: "Últimos 12 meses", value: 12 },
-              { label: "Últimos 24 meses", value: 24 },
-            ]}
-          />
-
-          {periodoCustom && (
-            <span className="text-[10px] text-amber-400">
-              Janela desativada: período personalizado ativo.
-            </span>
-          )}
-        </div>
-
-        {/* ======================= */}
-        {/* FECHAR ATÉ O MÊS */}
-        {/* ======================= */}
-        <div className="flex flex-col gap-1">
-          <span className="text-[11px] uppercase tracking-wide text-slate-500">
-            Fechar até o mês
-          </span>
-
-          <Select
-            value={mesRefCustom || ""}
-            onChange={(v) => setMesRefCustom(v)}
-            options={[
-              { label: "Último mês fechado", value: "" },
-              ...(allMonths || []).map((m) => ({
-                label: formatMesRef(m),
-                value: m,
-              })),
-            ]}
-          />
-
-          {mesRefCustom && (
-            <span className="text-[10px] text-amber-400 mt-1">
-              Visualização fechada em {formatMesRef(mesRefCustom)}.
-            </span>
-          )}
-          <span className="text-[10px] text-slate-500 mt-1">
-            Esse filtro ajusta apenas o período visual do dashboard.
-          </span>
-        </div>
-
-        {/* ======================= */}
         {/* PERÍODO PERSONALIZADO */}
         {/* ======================= */}
-        <div className="flex flex-col gap-1 md:col-span-3">
+        <div className="flex flex-col gap-1 md:col-span-2">
           <span className="text-[11px] uppercase tracking-wide text-slate-500">
             Período personalizado
           </span>
 
-          {/* Linha 1 */}
-          <div className="flex items-center gap-3">
-            <Select
-              value={inicioMes}
-              onChange={(mes) => {
-                if (!mes) return setPeriodoInicio("");
-                setPeriodoInicio(`${inicioAno || ANOS[0]}-${mes}`);
-              }}
-              options={[
-                { label: "Mês", value: "" },
-                ...MESES.map((m) => ({ label: m.label, value: m.value })),
-              ]}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] text-slate-500">De</label>
+              <input
+                type="month"
+                value={periodoInicio}
+                onChange={(e) => setPeriodoInicio(e.target.value)}
+                className="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 outline-none focus:border-sky-500"
+              />
+            </div>
 
-            <Select
-              value={inicioAno}
-              onChange={(ano) => {
-                if (!ano) return setPeriodoInicio("");
-                setPeriodoInicio(`${ano}-${inicioMes || "01"}`);
-              }}
-              options={[
-                { label: "Ano", value: "" },
-                ...ANOS.map((a) => ({ label: a, value: a })),
-              ]}
-            />
-          </div>
-
-          {/* Linha 2 */}
-          <div className="flex items-center gap-3 mt-2">
-            <Select
-              value={fimMes}
-              onChange={(mes) => {
-                if (!mes) return setPeriodoFim("");
-                setPeriodoFim(`${inicioAno || ANOS[0]}-${mes}`);
-              }}
-              options={[
-                { label: "Mês", value: "" },
-                ...MESES.map((m) => ({ label: m.label, value: m.value })),
-              ]}
-            />
-
-            <Select
-              value={fimAno}
-              onChange={(ano) => {
-                if (!ano) return setPeriodoFim("");
-                setPeriodoFim(`${ano}-${fimMes || "12"}`);
-              }}
-              options={[
-                { label: "Ano", value: "" },
-                ...ANOS.map((a) => ({ label: a, value: a })),
-              ]}
-            />
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] text-slate-500">Até</label>
+              <input
+                type="month"
+                value={periodoFim}
+                onChange={(e) => setPeriodoFim(e.target.value)}
+                className="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 outline-none focus:border-sky-500"
+              />
+            </div>
           </div>
 
           <span className="text-[10px] text-slate-500 mt-1">
-            Preencha início e fim para ativar o período personalizado.
+            Selecione mês/ano inicial e final para filtrar.
           </span>
 
           {periodoCustom && (

@@ -22,7 +22,8 @@ export default function SidebarLimite({ open, onClose }) {
 
   const k = dados?.kpis || {};
   const limite = dados?.limite_motor || {};
-  const nome = dados?.contexto?.clinica_nome || "-";
+  const codigo = dados?.contexto?.clinica_codigo || dados?.contexto?.clinica_nome || "-";
+  const nomeReal = dados?.contexto?.clinica_nome_real;
 
   const [valor, setValor] = useState("");
   const [obs, setObs] = useState("");
@@ -149,8 +150,13 @@ export default function SidebarLimite({ open, onClose }) {
                 Aprovação de limite
               </p>
               <h3 className="text-sm font-semibold text-slate-100">
-                {nome}
+                {codigo}
               </h3>
+              {nomeReal && (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {nomeReal}
+                </p>
+              )}
             </div>
             <button
               type="button"

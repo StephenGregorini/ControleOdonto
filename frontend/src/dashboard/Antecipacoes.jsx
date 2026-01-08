@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../AuthContext";
 import { API_BASE_URL } from "../apiConfig";
 import PageLayout from "../components/ui/PageLayout";
 import Modal from "../components/ui/Modal";
+import Select from "../components/ui/Select";
 import { useClinicas } from "../utils/useClinicas";
 import { formatCurrency, formatPercent } from "../utils/formatters";
 
@@ -25,6 +27,7 @@ function formatDateDisplay(value) {
 export default function Antecipacoes() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { profile } = useAuth();
   const { clinicas } = useClinicas();
   const [resumo, setResumo] = useState([]);
   const [operacoes, setOperacoes] = useState([]);
@@ -38,6 +41,10 @@ export default function Antecipacoes() {
   const [modalImport, setModalImport] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importResult, setImportResult] = useState(null);
+  const [importMode, setImportMode] = useState("csv");
+  const [forceImport, setForceImport] = useState(false);
+  const [replaceImport, setReplaceImport] = useState(false);
+  const [redashStatus, setRedashStatus] = useState(null);
 
   const [formClinica, setFormClinica] = useState("");
   const [formData, setFormData] = useState("");
@@ -46,6 +53,7 @@ export default function Antecipacoes() {
   const [formPagar, setFormPagar] = useState("");
   const [formObs, setFormObs] = useState("");
   const [saving, setSaving] = useState(false);
+  const syncUserLabel = profile?.nome || profile?.email || "admin";
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -80,15 +88,61 @@ export default function Antecipacoes() {
     carregar();
   }, [clinicaFiltro]);
 
+  useEffect(() => {
+    loadRedashStatus();
+  }, []);
+
   const resumoFiltrado = useMemo(() => {
     if (!clinicaFiltro) return resumo;
     return resumo.filter((r) => String(r.clinica_id) === String(clinicaFiltro));
   }, [resumo, clinicaFiltro]);
 
+  const clinicaOptions = useMemo(
+    () => [
+      { label: "Todas as clínicas", value: "" },
+      ...clinicas.map((c) => ({
+        label: (() => {
+          const codigo = c.codigo_clinica || c.nome || "";
+          const nome = c.nome || "";
+          const base = nome ? `${codigo} · ${nome}` : codigo;
+          return c.cnpj ? `${base} — ${c.cnpj}` : base;
+        })(),
+        value: c.id,
+      })),
+    ],
+    [clinicas]
+  );
+
+  const clinicaOptionsSelect = useMemo(
+    () => [
+      { label: "Selecione", value: "" },
+      ...clinicas.map((c) => ({
+        label: (() => {
+          const codigo = c.codigo_clinica || c.nome || "";
+          const nome = c.nome || "";
+          const base = nome ? `${codigo} · ${nome}` : codigo;
+          return c.cnpj ? `${base} — ${c.cnpj}` : base;
+        })(),
+        value: c.id,
+      })),
+    ],
+    [clinicas]
+  );
+
   const clinicaMap = useMemo(() => {
     const map = new Map();
     clinicas.forEach((c) => {
-      map.set(String(c.id), c.nome);
+      map.set(String(c.id), c.codigo_clinica || c.nome);
+    });
+    return map;
+  }, [clinicas]);
+
+  const clinicaNomeRealMap = useMemo(() => {
+    const map = new Map();
+    clinicas.forEach((c) => {
+      if (c.nome) {
+        map.set(String(c.id), c.nome);
+      }
     });
     return map;
   }, [clinicas]);
@@ -118,10 +172,32 @@ export default function Antecipacoes() {
   };
 
   const openImportModal = () => {
+    setImportMode("csv");
     setImportFile(null);
     setImportResult(null);
+    setForceImport(false);
+    setReplaceImport(false);
     setModalImport(true);
   };
+  const openSyncModal = () => {
+    setImportMode("redash");
+    setImportFile(null);
+    setImportResult(null);
+    setForceImport(false);
+    setReplaceImport(true);
+    loadRedashStatus();
+    setModalImport(true);
+  };
+  async function loadRedashStatus() {
+    try {
+      const r = await fetch(`${API_BASE_URL}/antecipacoes/redash-status`);
+      if (!r.ok) return;
+      const json = await r.json();
+      setRedashStatus(json);
+    } catch {
+      setRedashStatus(null);
+    }
+  }
 
   async function salvarAntecipacao() {
     if (!formClinica) {
@@ -205,12 +281,53 @@ export default function Antecipacoes() {
       });
       const json = await r.json().catch(() => ({}));
       if (!r.ok) {
+        if (json?.detail && typeof json.detail === "object") {
+          setErro(json.detail.message || "Erro ao importar CSV.");
+          setImportResult({
+            missing_clinicas: json.detail.missing_clinicas || [],
+          });
+          return;
+        }
         throw new Error(json.detail || "Erro ao importar CSV.");
       }
       setImportResult(json);
       await carregar();
     } catch (e) {
       setErro(e.message || "Erro ao importar CSV.");
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function handleImportRedash() {
+    try {
+      setSaving(true);
+      setErro(null);
+      const params = new URLSearchParams();
+      if (forceImport) params.set("force", "true");
+      if (replaceImport) params.set("replace", "true");
+      const who = profile?.nome || profile?.email;
+      if (who) params.set("registered_by", who);
+      const url = params.toString()
+        ? `${API_BASE_URL}/antecipacoes/import-redash?${params.toString()}`
+        : `${API_BASE_URL}/antecipacoes/import-redash`;
+      const r = await fetch(url, {
+        method: "POST",
+      });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (json?.detail && typeof json.detail === "object") {
+          setErro(json.detail.message || "Erro ao sincronizar Redash.");
+          setImportResult({
+            missing_clinicas: json.detail.missing_clinicas || [],
+          });
+          return;
+        }
+        throw new Error(json.detail || "Erro ao sincronizar Redash.");
+      }
+      setImportResult(json);
+      await carregar();
+    } catch (e) {
+      setErro(e.message || "Erro ao sincronizar Redash.");
     } finally {
       setSaving(false);
     }
@@ -226,34 +343,45 @@ export default function Antecipacoes() {
           <p className="mt-2 text-slate-400 text-sm sm:text-base max-w-3xl">
             Controle de antecipações por clínica, com governança de limite aprovado.
           </p>
+          <p className="mt-2 text-[11px] text-slate-500">
+            Última sincronização Redash:{" "}
+            <span className="text-slate-300">
+              {redashStatus?.last_sync ? formatDateDisplay(redashStatus.last_sync) : "-"}
+            </span>
+          </p>
         </div>
-        <button
-          onClick={openNovaAntecipacao}
-          className="px-4 py-2 rounded-xl text-sm border border-sky-500 text-sky-200 bg-sky-500/10 hover:bg-sky-500/20"
-        >
-          Nova antecipação
-        </button>
-        <button
-          onClick={openImportModal}
-          className="px-4 py-2 rounded-xl text-sm border border-sky-500/70 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 transition"
-        >
-          Importar CSV
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={openNovaAntecipacao}
+            className="px-4 py-2 rounded-xl text-sm border border-sky-500 text-sky-200 bg-sky-500/10 hover:bg-sky-500/20"
+          >
+            Nova antecipação
+          </button>
+          <button
+            onClick={openSyncModal}
+            className="px-4 py-2 rounded-xl text-sm border border-emerald-500/70 text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 transition"
+          >
+            Sincronizar Redash
+          </button>
+          <button
+            onClick={openImportModal}
+            className="px-4 py-2 rounded-xl text-sm border border-sky-500/70 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 transition"
+          >
+            Importar CSV
+          </button>
+        </div>
       </div>
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <select
-          value={clinicaFiltro}
-          onChange={(e) => setClinicaFiltro(e.target.value)}
-          className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-200"
-        >
-          <option value="">Todas as clínicas</option>
-          {clinicas.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nome}
-            </option>
-          ))}
-        </select>
+        <div className="w-full max-w-sm">
+          <Select
+            value={clinicaFiltro}
+            onChange={setClinicaFiltro}
+            searchable
+            searchPlaceholder="Buscar código, nome ou CNPJ..."
+            options={clinicaOptions}
+          />
+        </div>
         {clinicaFiltro && (
           <button
             onClick={() => navigate(`/admin/dashboard?clinica=${clinicaFiltro}`)}
@@ -310,7 +438,8 @@ export default function Antecipacoes() {
             <table className="w-full text-xs text-left text-slate-300">
               <thead className="text-[11px] text-slate-500 uppercase border-b border-slate-800">
                 <tr>
-                  <th className="py-2 pr-3">Clínica</th>
+                  <th className="py-2 pr-3">Código</th>
+                  <th className="py-2 pr-3">CNPJ</th>
                   <th className="py-2 pr-3 text-right">Limite aprovado</th>
                   <th className="py-2 pr-3 text-right">Antecipado</th>
                   <th className="py-2 pr-3 text-right">Reembolsado</th>
@@ -323,7 +452,24 @@ export default function Antecipacoes() {
                 {resumoFiltrado.map((row) => (
                   <tr key={row.clinica_id} className="border-b border-slate-800/60">
                     <td className="py-2 pr-3">
-                      {row.clinica_nome || clinicaMap.get(String(row.clinica_id)) || row.cnpj || row.clinica_id}
+                      <div className="flex flex-col">
+                        <span>
+                          {row.clinica_nome ||
+                            clinicaMap.get(String(row.clinica_id)) ||
+                            row.cnpj ||
+                            row.clinica_id}
+                        </span>
+                        {(row.clinica_nome_real ||
+                          clinicaNomeRealMap.get(String(row.clinica_id))) && (
+                          <span className="text-[11px] text-slate-500">
+                            {row.clinica_nome_real ||
+                              clinicaNomeRealMap.get(String(row.clinica_id))}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3 text-slate-400">
+                      {row.cnpj || "-"}
                     </td>
                     <td className="py-2 pr-3 text-right">
                       {formatCurrency(row.limite_aprovado)}
@@ -364,12 +510,15 @@ export default function Antecipacoes() {
             <table className="w-full text-xs text-left text-slate-300">
               <thead className="text-[11px] text-slate-500 uppercase border-b border-slate-800">
                 <tr>
-                  <th className="py-2 pr-3">Clínica</th>
+                  <th className="py-2 pr-3">Código</th>
+                  <th className="py-2 pr-3">CNPJ</th>
                   <th className="py-2 pr-3">Data</th>
                   <th className="py-2 pr-3 text-right">Valor líquido</th>
                   <th className="py-2 pr-3 text-right">Taxa</th>
                   <th className="py-2 pr-3 text-right">A pagar</th>
                   <th className="py-2 pr-3">Reembolso</th>
+                  <th className="py-2 pr-3">Redash ID</th>
+                  <th className="py-2 pr-3">Registrado por</th>
                   <th className="py-2 pr-3 text-center">Ações</th>
                 </tr>
               </thead>
@@ -377,7 +526,21 @@ export default function Antecipacoes() {
                 {operacoes.map((op) => (
                   <tr key={op.id} className="border-b border-slate-800/60">
                     <td className="py-2 pr-3">
-                      {clinicaMap.get(String(op.clinica_id)) || op.cnpj || op.clinica_id}
+                      <div className="flex flex-col">
+                        <span>
+                          {clinicaMap.get(String(op.clinica_id)) ||
+                            op.cnpj ||
+                            op.clinica_id}
+                        </span>
+                        {clinicaNomeRealMap.get(String(op.clinica_id)) && (
+                          <span className="text-[11px] text-slate-500">
+                            {clinicaNomeRealMap.get(String(op.clinica_id))}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3 text-slate-400">
+                      {op.cnpj || "-"}
                     </td>
                     <td className="py-2 pr-3">{formatDateDisplay(op.data_antecipacao)}</td>
                     <td className="py-2 pr-3 text-right">
@@ -391,6 +554,10 @@ export default function Antecipacoes() {
                     </td>
                     <td className="py-2 pr-3">
                       {op.data_reembolso ? formatDateDisplay(op.data_reembolso) : "Em aberto"}
+                    </td>
+                    <td className="py-2 pr-3 text-slate-400">{op.redash_id || "-"}</td>
+                    <td className="py-2 pr-3 text-slate-400">
+                      {op.registrado_por || "-"}
                     </td>
                     <td className="py-2 pr-3 text-center">
                       {!op.data_reembolso && (
@@ -422,18 +589,13 @@ export default function Antecipacoes() {
             <label className="block text-[11px] text-slate-400 mb-1">
               Clínica
             </label>
-            <select
+            <Select
               value={formClinica}
-              onChange={(e) => setFormClinica(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-200"
-            >
-              <option value="">Selecione</option>
-              {clinicas.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
+              onChange={setFormClinica}
+              searchable
+              searchPlaceholder="Buscar código, nome ou CNPJ..."
+              options={clinicaOptionsSelect}
+            />
           </div>
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">
@@ -538,26 +700,117 @@ export default function Antecipacoes() {
 
       <Modal open={modalImport} onClose={() => setModalImport(false)}>
         <h3 className="text-lg font-semibold text-slate-100">
-          Importar antecipações (CSV)
+          {importMode === "csv"
+            ? "Importar antecipações (CSV)"
+            : "Sincronizar antecipações (Redash)"}
         </h3>
-        <p className="text-slate-400 text-sm mt-2">
-          O CSV deve conter as colunas: CNPJ, Data Antecipação, MoneyDetails_Net,
-          MoneyDetails_Fee, MoneyDetails_ToBePaid e Data Reembolso.
-        </p>
-
-        <div className="mt-4">
-          <input
-            type="file"
-            accept=".csv"
-            onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-            className="w-full text-sm text-slate-200"
-          />
-        </div>
+        {importMode === "csv" ? (
+          <>
+            <p className="text-slate-400 text-sm mt-2">
+              O CSV deve conter as colunas: CNPJ, Data Antecipação, MoneyDetails_Net,
+              MoneyDetails_Fee, MoneyDetails_ToBePaid e Data Reembolso.
+            </p>
+            <div className="mt-4">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                className="w-full text-sm text-slate-200"
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-slate-400 text-sm mt-2">
+              A sincronização busca o CSV direto no Redash e aplica as mesmas regras de
+              governança (limite aprovado e saldo).
+            </p>
+            <p className="text-[11px] text-slate-500 mt-2">
+              Última sincronização:{" "}
+              <span className="text-slate-300">
+                {redashStatus?.last_sync
+                  ? formatDateDisplay(redashStatus.last_sync)
+                  : "-"}
+              </span>
+            </p>
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={replaceImport}
+                onChange={(e) => setReplaceImport(e.target.checked)}
+              />
+              Substituir base Redash (limpa e importa tudo)
+            </label>
+            <p className="text-[10px] text-slate-500 mt-1">
+              Remove apenas antecipações vindas do Redash antes de importar.
+            </p>
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={forceImport}
+                onChange={(e) => setForceImport(e.target.checked)}
+              />
+              Ignorar validação de limite aprovado
+            </label>
+          </>
+        )}
 
         {importResult && (
           <div className="mt-4 text-xs text-slate-300 border border-slate-800 rounded-lg p-3">
             <p>Inseridas: {importResult.inserted}</p>
             <p>Ignoradas: {importResult.skipped}</p>
+            {importResult.total_rows != null && (
+              <p>Total de linhas: {importResult.total_rows}</p>
+            )}
+            {importMode === "redash" && (
+              <p className="text-[11px] text-slate-500 mt-1">
+                Sincronizado por:{" "}
+                <span className="text-slate-300">{syncUserLabel}</span>
+              </p>
+            )}
+            {Array.isArray(importResult.missing_clinicas) &&
+              importResult.missing_clinicas.length > 0 && (
+                <div className="mt-3 text-amber-300">
+                  <p className="text-[11px] uppercase tracking-wide">
+                    Clínicas sem limite aprovado
+                  </p>
+                  <div className="mt-2">
+                    <button
+                      onClick={() => navigate("/admin/clinicas")}
+                      className="text-[11px] underline text-sky-300 hover:text-sky-200"
+                    >
+                      Ir para Clínicas para aprovar limites
+                    </button>
+                  </div>
+                  <ul className="mt-1 space-y-1">
+                    {importResult.missing_clinicas.map((row, idx) => (
+                      <li key={`${row.clinica_id}-${idx}`}>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>
+                            {row.clinica_nome || row.cnpj || row.clinica_id} —{" "}
+                            {row.linhas || 0} linhas
+                          </span>
+                          {row.clinica_nome_real && (
+                            <span className="text-[11px] text-slate-400">
+                              {row.clinica_nome_real}
+                            </span>
+                          )}
+                          {row.clinica_id && (
+                            <button
+                              onClick={() =>
+                                navigate(`/admin/dashboard?clinica=${row.clinica_id}`)
+                              }
+                              className="text-[11px] underline text-sky-300 hover:text-sky-200"
+                            >
+                              Abrir dashboard
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             {Array.isArray(importResult.errors) && importResult.errors.length > 0 && (
               <div className="mt-2 text-amber-300">
                 <p className="text-[11px] uppercase tracking-wide">Erros (primeiros 20)</p>
@@ -581,11 +834,17 @@ export default function Antecipacoes() {
             Cancelar
           </button>
           <button
-            onClick={handleImportCsv}
+            onClick={importMode === "csv" ? handleImportCsv : handleImportRedash}
             disabled={saving}
             className="px-4 py-2 rounded-xl text-sm border border-emerald-500 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
           >
-            {saving ? "Importando..." : "Importar"}
+            {saving
+              ? importMode === "csv"
+                ? "Importando..."
+                : "Sincronizando..."
+              : importMode === "csv"
+              ? "Importar"
+              : "Sincronizar"}
           </button>
         </div>
       </Modal>

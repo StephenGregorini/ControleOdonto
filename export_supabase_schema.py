@@ -4,7 +4,9 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from dotenv import load_dotenv
 
-load_dotenv()
+BASE_DIR = os.path.dirname(__file__)
+load_dotenv(os.path.join(BASE_DIR, ".env"), override=False)
+load_dotenv(os.path.join(BASE_DIR, "backend", ".env.local"), override=True)
 
 # ==========================
 # CONFIGURAÇÃO
@@ -14,7 +16,7 @@ DATABASE_URL = os.getenv("SUPABASE_DB_URL")
 
 if not DATABASE_URL:
     raise RuntimeError(
-        "Defina SUPABASE_DB_URL no .env ou ajuste diretamente no script."
+        "Defina SUPABASE_DB_URL em backend/.env.local (ou no .env da raiz)."
     )
 
 OUTPUT_FILE = "supabase_schema_full.json"

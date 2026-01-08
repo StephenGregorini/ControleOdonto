@@ -83,11 +83,19 @@ export default function DashboardHeader({ onExport }) {
           </div>
 
           <div>
-            Contexto:{" "}
+            Código:{" "}
             <span className="font-semibold text-slate-100">
-              {contexto?.clinica_nome || "-"}
+              {contexto?.clinica_codigo || contexto?.clinica_nome || "-"}
             </span>
           </div>
+          {contexto?.clinica_nome_real && (
+            <div>
+              Nome:{" "}
+              <span className="font-semibold text-slate-100">
+                {contexto.clinica_nome_real}
+              </span>
+            </div>
+          )}
 
           <div>
             Usuário:{" "}

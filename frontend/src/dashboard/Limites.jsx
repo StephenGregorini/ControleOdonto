@@ -56,9 +56,21 @@ export default function Limites() {
     }
   };
 
-  const filteredRanking = ranking.filter(c => 
-    c.clinica_nome.toLowerCase().includes(filter.toLowerCase())
-  );
+  const filteredRanking = ranking.filter((c) => {
+    const normalize = (txt) =>
+      String(txt || "")
+        .toLowerCase()
+        .replace(/[.\-\/\s]/g, "");
+    const busca = filter.toLowerCase();
+    const buscaNorm = normalize(filter);
+    const alvo = `${c.clinica_codigo || c.clinica_nome || ""} ${
+      c.clinica_nome_real || ""
+    } ${c.cnpj || ""}`;
+    return (
+      alvo.toLowerCase().includes(busca) ||
+      normalize(alvo).includes(buscaNorm)
+    );
+  });
 
   return (
     <>
@@ -71,7 +83,7 @@ export default function Limites() {
           <div className="mb-4">
             <input
               type="text"
-              placeholder="Filtrar clínicas..."
+              placeholder="Filtrar código, nome ou CNPJ..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -83,7 +95,7 @@ export default function Limites() {
               <thead className="text-xs text-slate-400 uppercase bg-slate-800/50">
                 <tr>
                   <th scope="col" className="px-6 py-3">
-                    Clínica
+                    Código
                   </th>
                   <th scope="col" className="px-6 py-3 text-right">
                     Score
@@ -115,7 +127,19 @@ export default function Limites() {
                       scope="row"
                       className="px-6 py-4 font-medium text-slate-200 whitespace-nowrap"
                     >
-                      {c.clinica_nome}
+                      <div className="flex flex-col">
+                        <span>{c.clinica_codigo || c.clinica_nome}</span>
+                        {c.clinica_nome_real && (
+                          <span className="text-[11px] text-slate-500">
+                            {c.clinica_nome_real}
+                          </span>
+                        )}
+                        {c.cnpj && (
+                          <span className="text-[11px] text-slate-500">
+                            {c.cnpj}
+                          </span>
+                        )}
+                      </div>
                     </th>
                     <td className="px-6 py-4 text-right">{c.score_credito?.toFixed(3) ?? "-"}</td>
                     <td className="px-6 py-4 text-right text-sky-300">
@@ -171,7 +195,7 @@ export default function Limites() {
               <p className="text-slate-400 text-sm mt-2">
                 Tem certeza que deseja revogar o limite de crédito da clínica{" "}
                 <span className="font-bold text-slate-200">
-                  {selectedClinica.clinica_nome}
+                  {selectedClinica.clinica_codigo || selectedClinica.clinica_nome}
                 </span>
                 ?
               </p>

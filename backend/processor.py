@@ -11,7 +11,9 @@ from io import BytesIO
 # CARREGAR ENV
 # ==========================
 
-load_dotenv()
+BASE_DIR = os.path.dirname(__file__)
+load_dotenv(os.path.join(BASE_DIR, "..", ".env"), override=False)
+load_dotenv(os.path.join(BASE_DIR, ".env.local"), override=True)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -125,7 +127,20 @@ def supabase_upsert(table, data, conflict):
         return None
 
 
-def get_or_create_clinica(cnpj, external_id):
+def supabase_insert(table, data):
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    r = requests.post(url, headers=HEADERS, json=data)
+    if r.status_code not in (200, 201):
+        raise RuntimeError(
+            f"Erro ao enviar para {table}: {r.status_code} - {r.text}"
+        )
+    try:
+        return r.json()
+    except Exception:
+        return None
+
+
+def get_or_create_clinica(cnpj, codigo_clinica):
     url = f"{SUPABASE_URL}/rest/v1/clinicas?cnpj=eq.{cnpj}"
     r = requests.get(url, headers=HEADERS)
 
@@ -136,11 +151,11 @@ def get_or_create_clinica(cnpj, external_id):
 
     payload = {
         "cnpj": cnpj,
-        "external_id": external_id,
-        "nome": external_id or cnpj
+        "codigo_clinica": codigo_clinica,
+        "nome": codigo_clinica or cnpj
     }
 
-    resp = supabase_upsert("clinicas", payload, "nome")
+    resp = supabase_insert("clinicas", payload)
     if resp:
         return resp[0]["id"]
 
@@ -230,14 +245,14 @@ def parse_excel_from_bytes(contents: bytes):
     xls = pd.ExcelFile(BytesIO(contents))
 
     cnpj = None
-    external_id = None
+    codigo_clinica = None
 
     for sheet in xls.sheet_names:
         df = xls.parse(sheet, header=None)
         for i in range(min(10, len(df))):
             if str(df.iloc[i, 0]).strip() == "CNPJ":
                 cnpj = to_str(df.iloc[i + 1, 0])
-                external_id = to_str(df.iloc[i + 1, 1])
+                codigo_clinica = to_str(df.iloc[i + 1, 1])
                 break
         if cnpj:
             break
@@ -246,7 +261,7 @@ def parse_excel_from_bytes(contents: bytes):
         raise RuntimeError("Não foi possível localizar CNPJ no arquivo.")
 
     result = {
-        "estabelecimento": {"cnpj": cnpj, "external_id": external_id},
+        "estabelecimento": {"cnpj": cnpj, "codigo_clinica": codigo_clinica},
         "boletos_emitidos": [],
         "taxa_pago_no_vencimento": [],
         "taxa_atraso_faixa": [],
@@ -376,7 +391,7 @@ def processar_excel(contents: bytes, arquivo_nome="arquivo.xlsx"):
 
     clinica_id = get_or_create_clinica(
         clinica["cnpj"],
-        clinica["external_id"]
+        clinica["codigo_clinica"]
     )
 
     contagem = {}

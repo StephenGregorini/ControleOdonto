@@ -64,7 +64,18 @@ export default function Dados() {
                       : "--"}
                   </td>
                   <td className="py-2 pr-3">
-                    {row.clinicas?.nome || "—"}
+                    <div className="flex flex-col">
+                      <span>
+                        {row.clinicas?.codigo_clinica ||
+                          row.clinicas?.nome ||
+                          "—"}
+                      </span>
+                      {row.clinicas?.nome && (
+                        <span className="text-[11px] text-slate-500">
+                          {row.clinicas.nome}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2 pr-3">{row.arquivo_nome}</td>
                   <td className="py-2 pr-3">{row.total_registros}</td>

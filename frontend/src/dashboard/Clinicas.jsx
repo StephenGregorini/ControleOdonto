@@ -51,7 +51,7 @@ const PainelClinica = React.memo(function PainelClinica({
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-slate-100 font-semibold text-lg">
-                {c.clinica_nome || "Carregando..."}
+                {c.clinica_codigo || c.clinica_nome || "Carregando..."}
               </h3>
               {c.cnpj && (
                 <p className="text-[11px] text-slate-500 mt-1">
@@ -278,9 +278,18 @@ export default function Clinicas() {
   // ===========================
   const filtradas = useMemo(() => {
     return clinicas.filter((c) => {
-      const nomeOk = (c.clinica_nome || "")
-        .toLowerCase()
-        .includes(filtroNome.toLowerCase());
+      const normalize = (txt) =>
+        String(txt || "")
+          .toLowerCase()
+          .replace(/[.\-\/\s]/g, "");
+      const busca = filtroNome.toLowerCase();
+      const buscaNorm = normalize(filtroNome);
+      const alvo = `${c.clinica_codigo || c.clinica_nome || ""} ${
+        c.clinica_nome_real || ""
+      } ${c.cnpj || ""}`;
+      const nomeOk =
+        alvo.toLowerCase().includes(busca) ||
+        normalize(alvo).includes(buscaNorm);
 
       const catOk =
         filtroCategoria === "todas" ||
@@ -486,7 +495,7 @@ export default function Clinicas() {
               <input
                 type="text"
                 className="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-10 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-sky-500"
-                placeholder="Buscar clínica por nome..."
+                placeholder="Buscar código, nome ou CNPJ..."
                 value={filtroNome}
                 onChange={(e) => setFiltroNome(e.target.value)}
               />
@@ -583,8 +592,13 @@ export default function Clinicas() {
                   <div className="flex items-start justify-between gap-3 pl-1">
                     <div className="flex-1">
                       <p className="text-slate-200 font-semibold text-sm group-hover:text-sky-300 line-clamp-2">
-                        {c.clinica_nome}
+                        {c.clinica_codigo || c.clinica_nome}
                       </p>
+                      {c.clinica_nome_real && (
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          {c.clinica_nome_real}
+                        </p>
+                      )}
                       {c.cnpj && (
                         <p className="text-[11px] text-slate-500 mt-1">
                           {c.cnpj}
@@ -711,7 +725,7 @@ export default function Clinicas() {
               <p className="text-slate-400 text-sm mt-2">
                 Tem certeza que deseja revogar o limite de crédito da clínica{" "}
                 <span className="font-bold text-slate-200">
-                  {clinicaSelecionada.clinica_nome}
+                  {clinicaSelecionada.clinica_codigo || clinicaSelecionada.clinica_nome}
                 </span>
                 ?
               </p>

@@ -26,6 +26,7 @@ def _load_env_file(path: str):
 _load_env_file(".env")
 _load_env_file(".env.local")
 _load_env_file(os.path.join("backend", ".env"))
+_load_env_file(os.path.join("backend", ".env.local"))
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")

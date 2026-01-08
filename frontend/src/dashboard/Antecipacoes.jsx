@@ -350,25 +350,37 @@ export default function Antecipacoes() {
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={openNovaAntecipacao}
-            className="px-4 py-2 rounded-xl text-sm border border-sky-500 text-sky-200 bg-sky-500/10 hover:bg-sky-500/20"
-          >
-            Nova antecipação
-          </button>
-          <button
-            onClick={openSyncModal}
-            className="px-4 py-2 rounded-xl text-sm border border-emerald-500/70 text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 transition"
-          >
-            Sincronizar Redash
-          </button>
-          <button
-            onClick={openImportModal}
-            className="px-4 py-2 rounded-xl text-sm border border-sky-500/70 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 transition"
-          >
-            Importar CSV
-          </button>
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">
+              Manual
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={openNovaAntecipacao}
+                className="px-4 py-2 rounded-xl text-sm border border-sky-500 text-sky-200 bg-sky-500/10 hover:bg-sky-500/20"
+              >
+                Nova antecipação
+              </button>
+              <button
+                onClick={openImportModal}
+                className="px-4 py-2 rounded-xl text-sm border border-sky-500/70 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 transition"
+              >
+                Importar CSV
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">
+              Automático
+            </span>
+            <button
+              onClick={openSyncModal}
+              className="px-4 py-2 rounded-xl text-sm border border-emerald-500/70 text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 transition"
+            >
+              Sincronizar Redash
+            </button>
+          </div>
         </div>
       </div>
 

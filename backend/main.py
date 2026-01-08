@@ -1429,9 +1429,9 @@ async def antecipacoes_redash_status():
     try:
         rows = supabase_get(
             "antecipacoes",
-            select="criado_em",
+            select="criado_em,registrado_por",
             extra_params={
-                "registrado_por": "eq.import_redash",
+                "or": "(redash_id.not.is.null,observacao.like.redash:*)",
                 "order": "criado_em.desc",
                 "limit": "1",
             },
@@ -1442,9 +1442,11 @@ async def antecipacoes_redash_status():
             detail=f"Erro ao consultar status do Redash: {e}",
         )
     last_sync = None
+    last_user = None
     if rows:
         last_sync = rows[0].get("criado_em")
-    return {"last_sync": last_sync}
+        last_user = rows[0].get("registrado_por")
+    return {"last_sync": last_sync, "last_user": last_user}
 
 
 

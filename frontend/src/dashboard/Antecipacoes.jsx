@@ -24,6 +24,17 @@ function formatDateDisplay(value) {
   }
 }
 
+function formatDateTimeDisplay(value) {
+  if (!value) return "-";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleString("pt-BR");
+  } catch {
+    return value;
+  }
+}
+
 export default function Antecipacoes() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,6 +49,7 @@ export default function Antecipacoes() {
   const [modalNovo, setModalNovo] = useState(false);
   const [modalReembolso, setModalReembolso] = useState(false);
   const [registroReembolso, setRegistroReembolso] = useState(null);
+  const [activeTab, setActiveTab] = useState("resumo");
   const [modalImport, setModalImport] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importResult, setImportResult] = useState(null);
@@ -346,8 +358,11 @@ export default function Antecipacoes() {
           <p className="mt-2 text-[11px] text-slate-500">
             Última sincronização Redash:{" "}
             <span className="text-slate-300">
-              {redashStatus?.last_sync ? formatDateDisplay(redashStatus.last_sync) : "-"}
+              {redashStatus?.last_sync ? formatDateTimeDisplay(redashStatus.last_sync) : "-"}
             </span>
+            {redashStatus?.last_user && (
+              <span className="text-slate-500"> • {redashStatus.last_user}</span>
+            )}
           </p>
         </div>
         <div className="flex flex-col items-end gap-3">
@@ -437,160 +452,193 @@ export default function Antecipacoes() {
         </div>
       </div>
 
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 mb-8">
-        <h3 className="text-slate-300 text-sm uppercase font-semibold tracking-wide mb-3">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setActiveTab("resumo")}
+          className={`px-3 py-1.5 rounded-full text-xs border ${
+            activeTab === "resumo"
+              ? "border-sky-400/70 bg-sky-500/15 text-sky-200"
+              : "border-slate-700 text-slate-400 hover:text-slate-200"
+          }`}
+        >
           Resumo por clínica
-        </h3>
-        {loading ? (
-          <p className="text-slate-500 text-sm">Carregando...</p>
-        ) : resumoFiltrado.length === 0 ? (
-          <p className="text-slate-500 text-sm">Sem dados.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left text-slate-300">
-              <thead className="text-[11px] text-slate-500 uppercase border-b border-slate-800">
-                <tr>
-                  <th className="py-2 pr-3">Código</th>
-                  <th className="py-2 pr-3">CNPJ</th>
-                  <th className="py-2 pr-3 text-right">Limite aprovado</th>
-                  <th className="py-2 pr-3 text-right">Antecipado</th>
-                  <th className="py-2 pr-3 text-right">Reembolsado</th>
-                  <th className="py-2 pr-3 text-right">Em aberto</th>
-                  <th className="py-2 pr-3 text-right">Saldo antecipável</th>
-                  <th className="py-2 pr-3 text-right">% antecipável</th>
-                </tr>
-              </thead>
-              <tbody>
-                {resumoFiltrado.map((row) => (
-                  <tr key={row.clinica_id} className="border-b border-slate-800/60">
-                    <td className="py-2 pr-3">
-                      <div className="flex flex-col">
-                        <span>
-                          {row.clinica_nome ||
-                            clinicaMap.get(String(row.clinica_id)) ||
-                            row.cnpj ||
-                            row.clinica_id}
-                        </span>
-                        {(row.clinica_nome_real ||
-                          clinicaNomeRealMap.get(String(row.clinica_id))) && (
-                          <span className="text-[11px] text-slate-500">
-                            {row.clinica_nome_real ||
-                              clinicaNomeRealMap.get(String(row.clinica_id))}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 pr-3 text-slate-400">
-                      {row.cnpj || "-"}
-                    </td>
-                    <td className="py-2 pr-3 text-right">
-                      {formatCurrency(row.limite_aprovado)}
-                    </td>
-                    <td className="py-2 pr-3 text-right">
-                      {formatCurrency(row.total_antecipado)}
-                    </td>
-                    <td className="py-2 pr-3 text-right">
-                      {formatCurrency(row.total_reembolsado)}
-                    </td>
-                    <td className="py-2 pr-3 text-right text-amber-300">
-                      {formatCurrency(row.em_aberto)}
-                    </td>
-                    <td className="py-2 pr-3 text-right text-emerald-300">
-                      {formatCurrency(row.saldo_antecipavel)}
-                    </td>
-                    <td className="py-2 pr-3 text-right">
-                      {formatPercent(row.percent_antecipavel)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        </button>
+        <button
+          onClick={() => setActiveTab("operacoes")}
+          className={`px-3 py-1.5 rounded-full text-xs border ${
+            activeTab === "operacoes"
+              ? "border-emerald-400/70 bg-emerald-500/15 text-emerald-200"
+              : "border-slate-700 text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          Operações
+        </button>
       </div>
 
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
-        <h3 className="text-slate-300 text-sm uppercase font-semibold tracking-wide mb-3">
-          Operações
-        </h3>
-        {loading ? (
-          <p className="text-slate-500 text-sm">Carregando...</p>
-        ) : operacoes.length === 0 ? (
-          <p className="text-slate-500 text-sm">Nenhuma operação registrada.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left text-slate-300">
-              <thead className="text-[11px] text-slate-500 uppercase border-b border-slate-800">
-                <tr>
-                  <th className="py-2 pr-3">Código</th>
-                  <th className="py-2 pr-3">CNPJ</th>
-                  <th className="py-2 pr-3">Data</th>
-                  <th className="py-2 pr-3 text-right">Valor líquido</th>
-                  <th className="py-2 pr-3 text-right">Taxa</th>
-                  <th className="py-2 pr-3 text-right">A pagar</th>
-                  <th className="py-2 pr-3">Reembolso</th>
-                  <th className="py-2 pr-3">Redash ID</th>
-                  <th className="py-2 pr-3">Registrado por</th>
-                  <th className="py-2 pr-3 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {operacoes.map((op) => (
-                  <tr key={op.id} className="border-b border-slate-800/60">
-                    <td className="py-2 pr-3">
-                      <div className="flex flex-col">
-                        <span>
-                          {clinicaMap.get(String(op.clinica_id)) ||
-                            op.cnpj ||
-                            op.clinica_id}
-                        </span>
-                        {clinicaNomeRealMap.get(String(op.clinica_id)) && (
-                          <span className="text-[11px] text-slate-500">
-                            {clinicaNomeRealMap.get(String(op.clinica_id))}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2 pr-3 text-slate-400">
-                      {op.cnpj || "-"}
-                    </td>
-                    <td className="py-2 pr-3">{formatDateDisplay(op.data_antecipacao)}</td>
-                    <td className="py-2 pr-3 text-right">
-                      {formatCurrency(op.valor_liquido)}
-                    </td>
-                    <td className="py-2 pr-3 text-right">
-                      {formatCurrency(op.valor_taxa)}
-                    </td>
-                    <td className="py-2 pr-3 text-right">
-                      {formatCurrency(op.valor_a_pagar)}
-                    </td>
-                    <td className="py-2 pr-3">
-                      {op.data_reembolso ? formatDateDisplay(op.data_reembolso) : "Em aberto"}
-                    </td>
-                    <td className="py-2 pr-3 text-slate-400">{op.redash_id || "-"}</td>
-                    <td className="py-2 pr-3 text-slate-400">
-                      {op.registrado_por || "-"}
-                    </td>
-                    <td className="py-2 pr-3 text-center">
-                      {!op.data_reembolso && (
-                        <button
-                          onClick={() => {
-                            setRegistroReembolso(op);
-                            setModalReembolso(true);
-                          }}
-                          className="text-emerald-300 hover:underline"
-                        >
-                          Marcar reembolso
-                        </button>
-                      )}
-                    </td>
+      {activeTab === "resumo" && (
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 mb-8">
+          <h3 className="text-slate-300 text-sm uppercase font-semibold tracking-wide mb-3">
+            Resumo por clínica
+          </h3>
+          {loading ? (
+            <p className="text-slate-500 text-sm">Carregando...</p>
+          ) : resumoFiltrado.length === 0 ? (
+            <p className="text-slate-500 text-sm">Sem dados.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left text-slate-300">
+                <thead className="text-[11px] text-slate-500 uppercase border-b border-slate-800">
+                  <tr>
+                    <th className="py-2 pr-3">Código</th>
+                    <th className="py-2 pr-3">CNPJ</th>
+                    <th className="py-2 pr-3 text-right">Limite aprovado</th>
+                    <th className="py-2 pr-3 text-right">Antecipado</th>
+                    <th className="py-2 pr-3 text-right">Reembolsado</th>
+                    <th className="py-2 pr-3 text-right">Em aberto</th>
+                    <th className="py-2 pr-3 text-right">Saldo antecipável</th>
+                    <th className="py-2 pr-3 text-right">% antecipável</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody>
+                  {resumoFiltrado.map((row) => (
+                    <tr key={row.clinica_id} className="border-b border-slate-800/60">
+                      <td className="py-2 pr-3">
+                        <div className="flex flex-col">
+                          <span>
+                            {row.clinica_nome ||
+                              clinicaMap.get(String(row.clinica_id)) ||
+                              row.cnpj ||
+                              row.clinica_id}
+                          </span>
+                          {(row.clinica_nome_real ||
+                            clinicaNomeRealMap.get(String(row.clinica_id))) && (
+                            <span className="text-[11px] text-slate-500">
+                              {row.clinica_nome_real ||
+                                clinicaNomeRealMap.get(String(row.clinica_id))}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 pr-3 text-slate-400">
+                        {row.cnpj || "-"}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {formatCurrency(row.limite_aprovado)}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {formatCurrency(row.total_antecipado)}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {formatCurrency(row.total_reembolsado)}
+                      </td>
+                      <td className="py-2 pr-3 text-right text-amber-300">
+                        {formatCurrency(row.em_aberto)}
+                      </td>
+                      <td className="py-2 pr-3 text-right text-emerald-300">
+                        {formatCurrency(row.saldo_antecipavel)}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {formatPercent(row.percent_antecipavel)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "operacoes" && (
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+          <h3 className="text-slate-300 text-sm uppercase font-semibold tracking-wide mb-3">
+            Operações
+          </h3>
+          {loading ? (
+            <p className="text-slate-500 text-sm">Carregando...</p>
+          ) : operacoes.length === 0 ? (
+            <p className="text-slate-500 text-sm">Nenhuma operação registrada.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left text-slate-300">
+                <thead className="text-[11px] text-slate-500 uppercase border-b border-slate-800">
+                  <tr>
+                    <th className="py-2 pr-3">Código</th>
+                    <th className="py-2 pr-3">CNPJ</th>
+                    <th className="py-2 pr-3">Data</th>
+                    <th className="py-2 pr-3 text-right">Valor líquido</th>
+                    <th className="py-2 pr-3 text-right">Taxa</th>
+                    <th className="py-2 pr-3 text-right">A pagar</th>
+                    <th className="py-2 pr-3">Reembolso</th>
+                    <th className="py-2 pr-3">Redash ID</th>
+                    <th className="py-2 pr-3">Registrado por</th>
+                    <th className="py-2 pr-3 text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {operacoes.map((op) => (
+                    <tr key={op.id} className="border-b border-slate-800/60">
+                      <td className="py-2 pr-3">
+                        <div className="flex flex-col">
+                          <span>
+                            {clinicaMap.get(String(op.clinica_id)) ||
+                              op.cnpj ||
+                              op.clinica_id}
+                          </span>
+                          {clinicaNomeRealMap.get(String(op.clinica_id)) && (
+                            <span className="text-[11px] text-slate-500">
+                              {clinicaNomeRealMap.get(String(op.clinica_id))}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 pr-3 text-slate-400">
+                        {op.cnpj || "-"}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {formatDateDisplay(op.data_antecipacao)}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {formatCurrency(op.valor_liquido)}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {formatCurrency(op.valor_taxa)}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {formatCurrency(op.valor_a_pagar)}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {op.data_reembolso
+                          ? formatDateDisplay(op.data_reembolso)
+                          : "Em aberto"}
+                      </td>
+                      <td className="py-2 pr-3 text-slate-400">
+                        {op.redash_id || "-"}
+                      </td>
+                      <td className="py-2 pr-3 text-slate-400">
+                        {op.registrado_por || "-"}
+                      </td>
+                      <td className="py-2 pr-3 text-center">
+                        {!op.data_reembolso && (
+                          <button
+                            onClick={() => {
+                              setRegistroReembolso(op);
+                              setModalReembolso(true);
+                            }}
+                            className="text-emerald-300 hover:underline"
+                          >
+                            Marcar reembolso
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <Modal open={modalNovo} onClose={() => setModalNovo(false)}>
         <h3 className="text-lg font-semibold text-slate-100">

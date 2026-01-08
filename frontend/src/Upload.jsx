@@ -90,7 +90,7 @@ export default function Upload() {
 
           <button
             onClick={() => setShowHistory(true)}
-            className="px-4 py-2 rounded-xl bg-slate-800/80 border border-slate-700 hover:border-sky-500/50 hover:text-sky-200 text-slate-300 text-sm transition"
+            className="px-4 py-2 rounded-xl bg-slate-900/70 border border-sky-500/40 text-sky-300 hover:border-sky-500/70 hover:text-sky-400 text-sm transition"
           >
             Ver Histórico
           </button>

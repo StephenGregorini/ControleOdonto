@@ -24,6 +24,7 @@ const PainelClinica = React.memo(function PainelClinica({
   onClose,
   onRevokeClick,
   onAprovarEditar,
+  onVerAntecipacoes,
   onVerDashboard,
 }) {
   if (!clinica) return null;
@@ -84,6 +85,20 @@ const PainelClinica = React.memo(function PainelClinica({
             </div>
 
             <div className="bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-3">
+              <p className="text-slate-500">Limite utilizado</p>
+              <p className="text-slate-200 font-semibold text-sm mt-1">
+                {fmt(c.limite_utilizado)}
+              </p>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-3">
+              <p className="text-slate-500">Limite disponível</p>
+              <p className="text-slate-200 font-semibold text-sm mt-1">
+                {fmt(c.limite_disponivel)}
+              </p>
+            </div>
+
+            <div className="bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-3">
               <p className="text-slate-500">Inadimplência média</p>
               <p className="text-rose-300 font-semibold text-sm mt-1">
                 {fmtPct(c.inadimplencia_media_periodo)}
@@ -132,9 +147,17 @@ const PainelClinica = React.memo(function PainelClinica({
 
             <button
               onClick={onVerDashboard}
-              className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[13px] border border-slate-700 text-slate-300 bg-slate-800/40 hover:bg-slate-700/50 transition"
+              className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[13px] border border-sky-500/60 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 transition"
             >
               Ver dashboard completo
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={onVerAntecipacoes}
+              className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[13px] border border-sky-500/60 text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 transition"
+            >
+              Ver antecipações
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -206,11 +229,15 @@ export default function Clinicas() {
     let somaInadimplencia = 0;
     let countInadimplencia = 0;
     let somaVolume = 0;
+    let somaLimiteUtilizado = 0;
+    let somaLimiteDisponivel = 0;
     const distCategorias = {};
 
     clinicas.forEach((c) => {
       somaLimiteAprovado += c.limite_aprovado || 0;
       somaLimiteSugerido += c.limite_sugerido || 0;
+      somaLimiteUtilizado += c.limite_utilizado || 0;
+      somaLimiteDisponivel += c.limite_disponivel || 0;
       somaVolume += c.valor_total_emitido_periodo || 0;
 
       if (
@@ -238,6 +265,8 @@ export default function Clinicas() {
       totalClinicas,
       totalLimiteAprovado: somaLimiteAprovado,
       totalLimiteSugerido: somaLimiteSugerido,
+      totalLimiteUtilizado: somaLimiteUtilizado,
+      totalLimiteDisponivel: somaLimiteDisponivel,
       inadimplenciaMedia,
       volumeAcumulado: somaVolume,
       distCategorias,
@@ -395,7 +424,7 @@ export default function Clinicas() {
         </div>
 
         {/* Resumo do portfólio */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <div className="bg-slate-900/80 border border-slate-800 rounded-2xl px-4 py-3">
             <p className="text-[11px] text-slate-500">Total de clínicas</p>
             <p className="text-slate-100 text-xl font-semibold mt-1">
@@ -418,6 +447,24 @@ export default function Clinicas() {
             </p>
             <p className="text-sky-300 text-sm font-semibold mt-1">
               {loadingDashboard ? "..." : fmt(resumo.totalLimiteSugerido)}
+            </p>
+          </div>
+
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl px-4 py-3">
+            <p className="text-[11px] text-slate-500">
+              Limite utilizado (total)
+            </p>
+            <p className="text-slate-200 text-sm font-semibold mt-1">
+              {loadingDashboard ? "..." : fmt(resumo.totalLimiteUtilizado)}
+            </p>
+          </div>
+
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl px-4 py-3">
+            <p className="text-[11px] text-slate-500">
+              Limite disponível (total)
+            </p>
+            <p className="text-slate-200 text-sm font-semibold mt-1">
+              {loadingDashboard ? "..." : fmt(resumo.totalLimiteDisponivel)}
             </p>
           </div>
 
@@ -575,6 +622,24 @@ export default function Clinicas() {
                     </p>
 
                     <p>
+                      <span className="text-slate-500">
+                        Limite utilizado:
+                      </span>{" "}
+                      <span className="text-slate-200">
+                        {fmt(c.limite_utilizado)}
+                      </span>
+                    </p>
+
+                    <p>
+                      <span className="text-slate-500">
+                        Limite disponível:
+                      </span>{" "}
+                      <span className="text-slate-200">
+                        {fmt(c.limite_disponivel)}
+                      </span>
+                    </p>
+
+                    <p>
                       <span className="text-slate-500">Inadimplência:</span>{" "}
                       <span className="text-rose-300">
                         {fmtPct(c.inadimplencia_media_periodo)}
@@ -617,6 +682,9 @@ export default function Clinicas() {
           onClose={() => setClinicaId("todas")}
           onRevokeClick={() => setShowConfirmRevoke(true)}
           onAprovarEditar={() => setPanelLimiteAberto(true)}
+          onVerAntecipacoes={() =>
+            navigate(`/admin/antecipacoes?clinica=${clinicaSelecionada.clinica_id}`)
+          }
           onVerDashboard={() =>
             navigate(`/admin/dashboard?clinica=${clinicaSelecionada.clinica_id}`)
           }
@@ -665,6 +733,7 @@ export default function Clinicas() {
           </button>
         </div>
       </Modal>
+
     </>
   );
 }

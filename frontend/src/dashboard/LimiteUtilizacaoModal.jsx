@@ -59,9 +59,18 @@ export default function LimiteUtilizacaoModal({
   }
 
   async function handleSalvar() {
+    if (limiteAprovado == null) {
+      setErro("Aprove um limite antes de registrar uso.");
+      return;
+    }
     const numericValue = parseBrazilianCurrency(valor);
+    const disponivel = Math.max((limiteAprovado || 0) - (limiteUtilizado || 0), 0);
     if (!numericValue || numericValue <= 0) {
       setErro("Informe um valor válido para o uso.");
+      return;
+    }
+    if (numericValue > disponivel) {
+      setErro("Valor utilizado excede o limite disponível.");
       return;
     }
     try {
@@ -126,6 +135,12 @@ export default function LimiteUtilizacaoModal({
               Limite utilizado:{" "}
               <span className="text-slate-200">{formatCurrency(limiteUtilizado)}</span>
             </p>
+            <p className="mt-1">
+              Limite disponível:{" "}
+              <span className="text-slate-200">
+                {formatCurrency(Math.max((limiteAprovado || 0) - (limiteUtilizado || 0), 0))}
+              </span>
+            </p>
           </div>
 
           <div>
@@ -167,6 +182,12 @@ export default function LimiteUtilizacaoModal({
             />
           </div>
 
+          {limiteAprovado == null && (
+            <div className="rounded-lg px-3 py-2 text-xs border bg-amber-900/40 border-amber-500/60 text-amber-100">
+              Aprove um limite antes de registrar uso.
+            </div>
+          )}
+
           {erro && (
             <div className="rounded-lg px-3 py-2 text-xs border bg-rose-900/40 border-rose-500/60 text-rose-100">
               {erro}
@@ -176,7 +197,7 @@ export default function LimiteUtilizacaoModal({
           <div className="flex justify-end">
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || limiteAprovado == null}
               onClick={handleSalvar}
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] border border-emerald-500 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-60"
             >

@@ -12,6 +12,18 @@ export default function Overview() {
 
   const k = dados.kpis || {};
   const periodo = dados.filtros?.periodo || {};
+  const limiteAprovado = k.limite_aprovado;
+  const limiteUtilizado = k.limite_utilizado || 0;
+  const limiteDisponivel =
+    k.limite_disponivel != null && !Number.isNaN(k.limite_disponivel)
+      ? k.limite_disponivel
+      : limiteAprovado != null
+      ? Math.max((limiteAprovado || 0) - limiteUtilizado, 0)
+      : null;
+  const limiteUsoPct =
+    limiteAprovado && limiteAprovado > 0
+      ? Math.min((limiteUtilizado / limiteAprovado) * 100, 100)
+      : 0;
 
   return (
     <div className="space-y-6">
@@ -57,6 +69,32 @@ export default function Overview() {
           color="sky"
         />
       </div>
+
+      {/* LIMITE ATIVO */}
+      {dados.contexto?.clinica_id && limiteAprovado != null && (
+        <Card>
+          <p className="text-xs text-slate-400 mb-1">Limite ativo</p>
+          <p className="text-xl font-semibold text-slate-100">
+            {formatCurrency(limiteAprovado)}
+          </p>
+          <div className="mt-2 space-y-1 text-[11px] text-slate-500">
+            <p>
+              Utilizado:{" "}
+              <span className="text-slate-200">{formatCurrency(limiteUtilizado)}</span>
+            </p>
+            <p>
+              Disponível:{" "}
+              <span className="text-slate-200">{formatCurrency(limiteDisponivel)}</span>
+            </p>
+          </div>
+          <div className="mt-3 h-2 rounded-full bg-slate-800 overflow-hidden">
+            <div
+              className="h-full bg-emerald-400/80"
+              style={{ width: `${limiteUsoPct}%` }}
+            />
+          </div>
+        </Card>
+      )}
 
       {/* LINHA 2 — OUTROS INDICADORES */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

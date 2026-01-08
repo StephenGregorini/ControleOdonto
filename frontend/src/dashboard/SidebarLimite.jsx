@@ -40,7 +40,21 @@ export default function SidebarLimite({ open, onClose }) {
           : valorSug != null && !Number.isNaN(valorSug)
           ? valorSug
           : "";
-      setValor(inicial !== "" ? String(Math.round(Number(inicial))).replace(".", ",") : "");
+      if (inicial === "") {
+        setValor("");
+        return;
+      }
+      const numero = Number(inicial);
+      if (Number.isNaN(numero)) {
+        setValor("");
+        return;
+      }
+      setValor(
+        numero.toLocaleString("pt-BR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+      );
     }
   }, [dados, k.limite_aprovado, k.limite_sugerido]);
 

@@ -94,6 +94,12 @@ export default function Limites() {
                   <th scope="col" className="px-6 py-3 text-right">
                     Limite Aprovado
                   </th>
+                  <th scope="col" className="px-6 py-3 text-right">
+                    Utilizado
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-right">
+                    Disponível
+                  </th>
                   <th scope="col" className="px-6 py-3 text-center">
                     Ações
                   </th>
@@ -117,6 +123,12 @@ export default function Limites() {
                     </td>
                     <td className="px-6 py-4 text-right text-emerald-300">
                       {formatCurrency(c.limite_aprovado)}
+                    </td>
+                    <td className="px-6 py-4 text-right text-slate-200">
+                      {formatCurrency(c.limite_utilizado)}
+                    </td>
+                    <td className="px-6 py-4 text-right text-slate-200">
+                      {formatCurrency(c.limite_disponivel)}
                     </td>
                     <td className="px-6 py-4 text-center space-x-2">
                       <button
@@ -181,6 +193,7 @@ export default function Limites() {
           </button>
         </div>
       </Modal>
+
     </>
   );
 }

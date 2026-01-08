@@ -813,6 +813,56 @@
     },
     {
       "schema": "auth",
+      "name": "oauth_client_states",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "uuid"
+        },
+        {
+          "column_name": "provider_type",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "code_verifier",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "timestamptz"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": []
+    },
+    {
+      "schema": "auth",
       "name": "oauth_clients",
       "columns": [
         {
@@ -2043,6 +2093,126 @@
     },
     {
       "schema": "public",
+      "name": "antecipacoes",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "uuid"
+        },
+        {
+          "column_name": "clinica_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "uuid"
+        },
+        {
+          "column_name": "cnpj",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "data_antecipacao",
+          "data_type": "date",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "date"
+        },
+        {
+          "column_name": "valor_liquido",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "numeric"
+        },
+        {
+          "column_name": "valor_taxa",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "numeric"
+        },
+        {
+          "column_name": "valor_a_pagar",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "numeric"
+        },
+        {
+          "column_name": "data_reembolso",
+          "data_type": "date",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "date"
+        },
+        {
+          "column_name": "observacao",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "registrado_por",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "criado_em",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": "now()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "timestamptz"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": []
+    },
+    {
+      "schema": "public",
       "name": "boletos_emitidos",
       "columns": [
         {
@@ -2360,6 +2530,16 @@
           "numeric_precision": null,
           "numeric_scale": null,
           "udt_name": "jsonb"
+        },
+        {
+          "column_name": "mes_ref",
+          "data_type": "character varying",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": 7,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "varchar"
         }
       ],
       "primary_key": [
@@ -2442,6 +2622,86 @@
           "foreign_column_name": "id"
         }
       ]
+    },
+    {
+      "schema": "public",
+      "name": "limite_utilizacoes",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "uuid"
+        },
+        {
+          "column_name": "clinica_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "uuid"
+        },
+        {
+          "column_name": "valor_utilizado",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "numeric"
+        },
+        {
+          "column_name": "data_referencia",
+          "data_type": "date",
+          "is_nullable": "NO",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "date"
+        },
+        {
+          "column_name": "observacao",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "registrado_por",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "text"
+        },
+        {
+          "column_name": "criado_em",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": "now()",
+          "character_maximum_length": null,
+          "numeric_precision": null,
+          "numeric_scale": null,
+          "udt_name": "timestamptz"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": []
     },
     {
       "schema": "public",

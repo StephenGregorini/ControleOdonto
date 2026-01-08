@@ -6,6 +6,7 @@ import Upload from "./Upload";
 import Historico from "./Historico";
 import Dashboard from "./dashboard/Dashboard";
 import Clinicas from "./dashboard/Clinicas";
+import Antecipacoes from "./dashboard/Antecipacoes";
 import Dados from "./dashboard/Dados";
 import Login from "./Login";
 import Perfil from "./Perfil";
@@ -48,6 +49,7 @@ export default function App() {
       >
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="clinicas" element={<Clinicas />} />
+        <Route path="antecipacoes" element={<Antecipacoes />} />
         <Route path="dados" element={<Dados />} />
       </Route>
 

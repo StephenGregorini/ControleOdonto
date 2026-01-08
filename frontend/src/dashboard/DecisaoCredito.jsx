@@ -1,11 +1,10 @@
-import React, { useState } from "react";
+import React from "react";
 import { useDashboard } from "../DashboardContext";
 import { formatCurrency, formatPercent, formatMesRef } from "../utils/formatters";
 import HistoricoLimites from "../components/ui/HistoricoLimites";
-import LimiteUtilizacaoModal from "./LimiteUtilizacaoModal";
 
 export default function DecisaoCredito() {
-  const { dados, setPanelLimiteAberto, clinicaId, reloadDashboard } = useDashboard();
+  const { dados, setPanelLimiteAberto, clinicaId } = useDashboard();
 
   if (!dados) return null;
 
@@ -28,8 +27,6 @@ export default function DecisaoCredito() {
   // Se houver limite_aprovado atual no kpis → é o limite ativo
   const limiteAtualAtivo =
     k.limite_aprovado != null && !Number.isNaN(k.limite_aprovado);
-
-  const [modalUsoAberto, setModalUsoAberto] = useState(false);
 
   return (
     <section className="space-y-6">
@@ -60,12 +57,6 @@ export default function DecisaoCredito() {
 
             {clinicaId !== "todas" && (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setModalUsoAberto(true)}
-                  className="px-3 py-1.5 rounded-full text-[11px] border border-slate-600 text-slate-200 hover:bg-slate-800"
-                >
-                  Registrar uso
-                </button>
                 <button
                   onClick={() => setPanelLimiteAberto(true)}
                   className="px-3 py-1.5 rounded-full text-[11px] border border-sky-500 text-sky-200 bg-sky-500/10 hover:bg-sky-500/20"
@@ -239,14 +230,6 @@ export default function DecisaoCredito() {
       {/* HISTÓRICO */}
       <HistoricoLimites historico={historico} />
 
-      <LimiteUtilizacaoModal
-        open={modalUsoAberto}
-        onClose={() => setModalUsoAberto(false)}
-        clinicaId={clinicaId}
-        limiteAprovado={k.limite_aprovado}
-        limiteUtilizado={k.limite_utilizado}
-        onSaved={reloadDashboard}
-      />
     </section>
   );
 }

@@ -84,6 +84,9 @@ export default function Comportamento() {
     );
   }, [s]);
 
+  const gridColor = "var(--chart-grid)";
+  const axisColor = "var(--chart-axis)";
+
   return (
     <section className="space-y-6">
       <h2 className="text-slate-300 text-sm uppercase font-semibold tracking-wide">
@@ -149,18 +152,25 @@ export default function Comportamento() {
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={series}>
-                <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" />
-                <XAxis dataKey="mes_ref" stroke="#64748b" fontSize={11} />
+                <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="mes_ref"
+                  stroke={axisColor}
+                  tick={{ fill: axisColor }}
+                  fontSize={11}
+                />
                 <YAxis
                   yAxisId="left"
-                  stroke="#64748b"
+                  stroke={axisColor}
+                  tick={{ fill: axisColor }}
                   fontSize={11}
                   tickFormatter={(v) => `${(v * 100).toFixed(0)}%`}
                 />
                 <YAxis
                   yAxisId="right"
                   orientation="right"
-                  stroke="#64748b"
+                  stroke={axisColor}
+                  tick={{ fill: axisColor }}
                   fontSize={11}
                   tickFormatter={(v) =>
                     v > 1000
@@ -178,7 +188,12 @@ export default function Comportamento() {
                   strokeWidth={2}
                   name="Inadimplência real"
                 >
-                  <LabelList dataKey="inad" position="top" formatter={(v) => formatPercent(v)} style={{ fontSize: 10, fill: chartColors.inad }} />
+                  <LabelList
+                    dataKey="inad"
+                    position="top"
+                    formatter={(v) => formatPercent(v)}
+                    style={{ fontSize: 10, fill: "var(--chart-inad-label)" }}
+                  />
                 </Line>
                 <Line
                   yAxisId="left"
@@ -188,7 +203,12 @@ export default function Comportamento() {
                   strokeWidth={2}
                   name="Pago no Venc."
                 >
-                  <LabelList dataKey="pagoVenc" position="top" formatter={(v) => formatPercent(v)} style={{ fontSize: 10, fill: chartColors.pagoVenc }} />
+                  <LabelList
+                    dataKey="pagoVenc"
+                    position="top"
+                    formatter={(v) => formatPercent(v)}
+                    style={{ fontSize: 10, fill: "var(--chart-pago-label)" }}
+                  />
                 </Line>
                 <Line
                   yAxisId="right"
@@ -198,7 +218,12 @@ export default function Comportamento() {
                   strokeWidth={2}
                   name="Volume"
                 >
-                  <LabelList dataKey="valorEmitido" position="top" formatter={(v) => formatCurrency(v, 0)} style={{ fontSize: 10, fill: chartColors.valor }} />
+                  <LabelList
+                    dataKey="valorEmitido"
+                    position="top"
+                    formatter={(v) => formatCurrency(v, 0)}
+                    style={{ fontSize: 10, fill: "var(--chart-valor-label)" }}
+                  />
                 </Line>
               </LineChart>
             </ResponsiveContainer>

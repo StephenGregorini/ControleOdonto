@@ -93,7 +93,7 @@ const menu = [
       </aside>
 
       {/* CONTEÚDO PRINCIPAL */}
-      <main className="flex-1 p-8 flex flex-col items-start ml-60">
+      <main className="flex-1 p-8 flex flex-col items-stretch ml-60 min-w-0">
         {children}
       </main>
     </div>

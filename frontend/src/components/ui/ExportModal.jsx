@@ -169,7 +169,7 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths, defaultClinic
           String(txt || "")
             .toLowerCase()
             .replace(/[.\-\/\s]/g, "");
-        const target = `${c.nome || ""} ${c.cnpj || ""}`;
+        const target = `${c.codigo_clinica || ""} ${c.nome || ""} ${c.cnpj || ""}`;
         return (
           target.toLowerCase().includes(lowerCaseSearch) ||
           normalize(target).includes(normalize(clinicSearch))
@@ -234,7 +234,7 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths, defaultClinic
 
   return (
     <Modal open={isOpen} onClose={onClose} wide={true}>
-      <div className="text-white">
+      <div className="text-slate-100">
         <h2 className="text-2xl font-bold mb-6">Montar Relatório (Base de Dados)</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8">
@@ -246,7 +246,7 @@ const ExportModal = ({ isOpen, onClose, onExport, availableMonths, defaultClinic
               placeholder="Buscar código, nome ou CNPJ..."
               value={clinicSearch}
               onChange={(e) => setClinicSearch(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm mb-2"
+              className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 mb-2"
             />
             <div className="border border-slate-700 p-3 rounded-lg">
                 <Checkbox 

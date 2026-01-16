@@ -361,6 +361,11 @@ def _parse_date_br(value: str | None):
         except Exception:
             continue
     try:
+        normalized = txt.replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized).date().isoformat()
+    except Exception:
+        pass
+    try:
         serial = float(txt)
         base = datetime(1899, 12, 30)
         return (base + timedelta(days=int(serial))).date().isoformat()
@@ -682,7 +687,12 @@ async def listar_antecipacoes(clinica_id: str | None = None):
             params["clinica_id"] = f"eq.{clinica_id}"
         rows = supabase_get_all(
             "antecipacoes",
-            select="id,clinica_id,cnpj,data_antecipacao,valor_liquido,valor_taxa,valor_a_pagar,data_reembolso,observacao,registrado_por,criado_em,redash_id",
+            select=(
+                "id,clinica_id,cnpj,data_antecipacao,valor_liquido,valor_taxa,valor_a_pagar,"
+                "data_reembolso,data_reembolso_programada,data_pagamento_antecipacao,"
+                "data_pagamento_reembolso,data_evento,data_solicitacao,valor_bruto,"
+                "observacao,registrado_por,criado_em,redash_id"
+            ),
             extra_params=params,
         )
     except Exception as e:
@@ -697,6 +707,30 @@ async def registrar_antecipacao(payload: AntecipacaoPayload):
         raise HTTPException(
             status_code=400,
             detail="É necessário aprovar um limite antes de registrar antecipação.",
+        )
+
+    today = datetime.utcnow().date().isoformat()
+    try:
+        inadimplente_rows = supabase_get_all(
+            "antecipacoes",
+            select="id",
+            extra_params={
+                "clinica_id": f"eq.{payload.clinica_id}",
+                "data_reembolso_programada": f"lt.{today}",
+                "data_reembolso": "is.null",
+                "data_pagamento_reembolso": "is.null",
+                "limit": "1",
+            },
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao validar inadimplência: {e}",
+        )
+    if inadimplente_rows:
+        raise HTTPException(
+            status_code=400,
+            detail="Clínica inadimplente: há reembolsos em atraso. Regularize antes de antecipar.",
         )
 
     try:
@@ -965,9 +999,18 @@ async def importar_antecipacoes_csv(
                 continue
 
             data_antecipacao = _parse_date_br(
-                get_value(row, ["data antecipação", "data antecipacao", "data"])
+                get_value(row, ["data antecipação", "data antecipacao", "data", "data pagamento da antecipação"])
             )
-            data_reembolso = _parse_date_br(get_value(row, ["data reembolso"]))
+            data_reembolso = _parse_date_br(
+                get_value(row, ["data reembolso", "data pagamento do reembolso"])
+            )
+            data_reembolso_programada = _parse_date_br(
+                get_value(row, ["data pagamento original / reembolso programada", "data pagamento original", "reembolso programada"])
+            )
+            data_solicitacao = _parse_date_br(
+                get_value(row, ["data solicitacao da antecipação", "data solicitacao"])
+            )
+            data_evento = _parse_date_br(get_value(row, ["data evento"]))
             valor_liquido = _parse_brl_number(
                 get_value(row, ["moneydetails_net", "net", "moneydetails net"])
             )
@@ -976,6 +1019,9 @@ async def importar_antecipacoes_csv(
             )
             valor_a_pagar = _parse_brl_number(
                 get_value(row, ["moneydetails_tobepaid", "to be paid", "a pagar"])
+            )
+            valor_bruto = _parse_brl_number(
+                get_value(row, ["valor bruto", "cost_value"])
             )
 
             if valor_liquido is None or valor_liquido <= 0:
@@ -1012,19 +1058,25 @@ async def importar_antecipacoes_csv(
                 if not data_reembolso:
                     aberto_map[clinica_id] = aberto_atual + valor_liquido
 
-            payloads.append(
-                {
-                    "clinica_id": clinica_id,
-                    "cnpj": cnpj,
-                    "data_antecipacao": data_antecipacao or datetime.utcnow().date().isoformat(),
-                    "valor_liquido": valor_liquido,
-                    "valor_taxa": valor_taxa,
-                    "valor_a_pagar": valor_a_pagar,
-                    "data_reembolso": data_reembolso,
-                    "observacao": "import_csv",
-                    "registrado_por": "import_csv",
-                }
-            )
+                payloads.append(
+                    {
+                        "clinica_id": clinica_id,
+                        "cnpj": cnpj,
+                        "data_antecipacao": data_antecipacao or datetime.utcnow().date().isoformat(),
+                        "valor_liquido": valor_liquido,
+                        "valor_taxa": valor_taxa,
+                        "valor_a_pagar": valor_a_pagar,
+                        "data_reembolso": data_reembolso,
+                        "data_reembolso_programada": data_reembolso_programada,
+                        "data_pagamento_antecipacao": data_antecipacao,
+                        "data_pagamento_reembolso": data_reembolso,
+                        "data_evento": data_evento,
+                        "data_solicitacao": data_solicitacao,
+                        "valor_bruto": valor_bruto,
+                        "observacao": "import_csv",
+                        "registrado_por": "import_csv",
+                    }
+                )
 
         inserted = 0
         chunk_size = 500
@@ -1159,7 +1211,17 @@ async def importar_antecipacoes_redash(
         clinica_ids.add(clinica_id)
         clinica_counts[clinica_id] = clinica_counts.get(clinica_id, 0) + 1
         data_antecipacao = _parse_date_br(
-            get_value(row, ["data antecipação", "data antecipacao", "data"])
+            get_value(
+                row,
+                [
+                    "data antecipação",
+                    "data antecipacao",
+                    "data_pagamento_antecipacao",
+                    "data pagamento antecipacao",
+                    "data pagamento da antecipação",
+                    "data",
+                ],
+            )
         )
         if data_antecipacao:
             try:
@@ -1317,9 +1379,56 @@ async def importar_antecipacoes_redash(
             continue
 
         data_antecipacao = _parse_date_br(
-            get_value(row, ["data antecipação", "data antecipacao", "data"])
+            get_value(
+                row,
+                [
+                    "data antecipação",
+                    "data antecipacao",
+                    "data_pagamento_antecipacao",
+                    "data pagamento antecipacao",
+                    "data pagamento da antecipação",
+                    "data",
+                ],
+            )
         )
-        data_reembolso = _parse_date_br(get_value(row, ["data reembolso"]))
+        data_reembolso = _parse_date_br(
+            get_value(
+                row,
+                [
+                    "data reembolso",
+                    "data_reembolso",
+                    "data_pagamento_reembolso",
+                    "data pagamento reembolso",
+                    "data pagamento do reembolso",
+                ],
+            )
+        )
+        data_reembolso_programada = _parse_date_br(
+            get_value(
+                row,
+                [
+                    "data pagamento original / reembolso programada",
+                    "data_pagamento_original",
+                    "data pagamento original",
+                    "data_reembolso_programada",
+                    "reembolso programada",
+                ],
+            )
+        )
+        data_solicitacao = _parse_date_br(
+            get_value(
+                row,
+                [
+                    "data solicitacao da antecipação",
+                    "data_solicitacao_antecipacao",
+                    "data_solicitacao",
+                    "data solicitacao",
+                ],
+            )
+        )
+        data_evento = _parse_date_br(
+            get_value(row, ["data evento", "data_evento"])
+        )
         valor_liquido = _parse_number_flexible(
             get_value(row, ["moneydetails_net", "moneydetails net", "moneydetails_net"])
         )
@@ -1332,8 +1441,20 @@ async def importar_antecipacoes_redash(
                 ["moneydetails_tobepaid", "moneydetails to be paid", "moneydetails_tobepaid"],
             )
         )
+        valor_bruto = _parse_number_flexible(
+            get_value(row, ["valor bruto", "valor_bruto", "cost_value"])
+        )
         redash_ref = _safe_str(
-            get_value(row, ["id antecipação", "id antecipacao", "requestid", "receita_id"])
+            get_value(
+                row,
+                [
+                    "id antecipação",
+                    "id antecipacao",
+                    "id_antecipacao",
+                    "requestid",
+                    "receita_id",
+                ],
+            )
         )
 
         if valor_liquido is None or valor_liquido <= 0:
@@ -1402,6 +1523,12 @@ async def importar_antecipacoes_redash(
                 "valor_taxa": valor_taxa,
                 "valor_a_pagar": valor_a_pagar,
                 "data_reembolso": data_reembolso,
+                "data_reembolso_programada": data_reembolso_programada,
+                "data_pagamento_antecipacao": data_antecipacao,
+                "data_pagamento_reembolso": data_reembolso,
+                "data_evento": data_evento,
+                "data_solicitacao": data_solicitacao,
+                "valor_bruto": valor_bruto,
                 "redash_id": redash_ref or None,
                 "observacao": observacao,
                 "registrado_por": registered_by or "import_redash",

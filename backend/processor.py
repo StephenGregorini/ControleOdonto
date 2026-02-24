@@ -47,28 +47,191 @@ def to_str(v):
     return str(v).strip()
 
 
+def _to_python_scalar(v):
+    if hasattr(v, "item"):
+        try:
+            return v.item()
+        except Exception:
+            pass
+    return v
+
+
 def fix_percentual(v):
     if pd.isna(v):
         return None
+
+    v = _to_python_scalar(v)
+
     if isinstance(v, str):
+        v = v.strip().replace("%", "").replace(",", ".")
+        if not v:
+            return None
         try:
             v = float(v)
-        except:
+        except Exception:
             return None
+
+    try:
+        v = float(v)
+    except Exception:
+        return None
+
+    if math.isnan(v):
+        return None
+
     if v > 10_000_000_000:
         return v / 1_000_000_000_000
     return v
 
 
+def fix_int(v):
+    if pd.isna(v):
+        return None
+
+    v = _to_python_scalar(v)
+
+    if isinstance(v, bool):
+        return int(v)
+
+    if isinstance(v, int):
+        return v
+
+    if isinstance(v, float):
+        if math.isnan(v):
+            return None
+        arredondado = round(v)
+        if abs(v - arredondado) < 1e-9:
+            return int(arredondado)
+        return None
+
+    if isinstance(v, str):
+        raw = v.strip().replace(",", ".")
+        if not raw:
+            return None
+        if raw.count(".") > 1 and re.fullmatch(r"\d{1,3}(\.\d{3})+(\.0+)?", raw):
+            raw = raw.replace(".", "")
+        try:
+            numero = float(raw)
+        except Exception:
+            return None
+        if math.isnan(numero):
+            return None
+        arredondado = round(numero)
+        if abs(numero - arredondado) < 1e-9:
+            return int(arredondado)
+        return None
+
+    return None
+
+
+def _faixa_from_limites(a, b):
+    lo, hi = sorted((int(a), int(b)))
+
+    if hi <= 7:
+        return "0-7"
+    if hi <= 15 and lo <= 8:
+        return "8-15"
+    if lo <= 1 and 16 <= hi <= 30:
+        return "16-30"
+    if lo >= 16 and hi <= 30:
+        return "16-30"
+    if hi > 30:
+        return ">30"
+    return None
+
+
+def _faixa_from_datetime(dt):
+    faixa = _faixa_from_limites(dt.day, dt.month)
+    if faixa:
+        return faixa
+    return _faixa_from_limites(dt.month, dt.day)
+
+
+def _parse_faixa_datetime(raw):
+    texto = str(raw).strip()
+    if re.fullmatch(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", texto):
+        return pd.to_datetime(texto, errors="coerce", dayfirst=False)
+    return pd.to_datetime(texto, errors="coerce", dayfirst=True)
+
+
 def fix_faixa(v):
+    if pd.isna(v):
+        return None
+
+    v = _to_python_scalar(v)
+
     if isinstance(v, datetime):
-        d, m = v.day, v.month
-        if (d, m) in [(1, 7), (1, 1)]:
-            return "0-7"
-        if (d, m) == (1, 8):
-            return "8-15"
-        return str(v.date())
-    return str(v)
+        faixa = _faixa_from_datetime(v)
+        return faixa or str(v.date())
+
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if isinstance(v, float) and math.isnan(v):
+            return None
+
+        if float(v).is_integer() and v > 20_000:
+            dt = pd.to_datetime(v, unit="D", origin="1899-12-30", errors="coerce")
+            if not pd.isna(dt):
+                faixa = _faixa_from_datetime(dt.to_pydatetime())
+                if faixa:
+                    return faixa
+
+        if float(v).is_integer():
+            iv = int(v)
+            if iv > 30:
+                return ">30"
+            return str(iv)
+        return str(v)
+
+    raw = str(v).strip()
+    if not raw:
+        return None
+
+    normalizado = raw.lower()
+    normalizado = normalizado.replace("–", "-").replace("—", "-").replace("--", "-")
+    normalizado = re.sub(r"\s+", " ", normalizado).strip()
+
+    if "30" in normalizado and (
+        ">" in normalizado or "+" in normalizado or "maior" in normalizado or "acima" in normalizado
+    ):
+        return ">30"
+
+    if re.fullmatch(r"\d+(\.0+)?", normalizado):
+        num = float(normalizado)
+        if num.is_integer() and num > 20_000:
+            dt = pd.to_datetime(num, unit="D", origin="1899-12-30", errors="coerce")
+            if not pd.isna(dt):
+                faixa = _faixa_from_datetime(dt.to_pydatetime())
+                if faixa:
+                    return faixa
+
+    nums = [int(n) for n in re.findall(r"\d+", normalizado)]
+
+    if len(nums) >= 3:
+        dt = _parse_faixa_datetime(raw)
+        if not pd.isna(dt):
+            faixa = _faixa_from_datetime(dt.to_pydatetime())
+            if faixa:
+                return faixa
+
+    tem_separador_faixa = (
+        "-" in normalizado
+        or "/" in normalizado
+        or " a " in f" {normalizado} "
+        or "até" in normalizado
+    )
+
+    if tem_separador_faixa and len(nums) == 2:
+        faixa = _faixa_from_limites(nums[0], nums[1])
+        if faixa:
+            return faixa
+
+    dt = _parse_faixa_datetime(raw)
+    if not pd.isna(dt):
+        faixa = _faixa_from_datetime(dt.to_pydatetime())
+        if faixa:
+            return faixa
+
+    return raw
 
 
 def normalize_mesref(v):
@@ -79,6 +242,12 @@ def normalize_mesref(v):
 
 
 def json_safe(o):
+    o = _to_python_scalar(o)
+    try:
+        if pd.isna(o):
+            return None
+    except Exception:
+        pass
     if isinstance(o, float) and math.isnan(o):
         return None
     return o
@@ -173,7 +342,7 @@ def parse_block(title, header, rows):
         return ("boletos_emitidos", [
             {
                 "mes_ref": normalize_mesref(r[0]),
-                "qtde": json_safe(r[1]),
+                "qtde": fix_int(r[1]),
                 "valor_total": json_safe(r[2]) if len(r) > 2 else None
             }
             for r in rows
@@ -192,7 +361,7 @@ def parse_block(title, header, rows):
                 dados.append({
                     "mes_ref": normalize_mesref(r[0]),
                     "faixa": fix_faixa(r[1]),
-                    "qtde": json_safe(r[2]),
+                    "qtde": fix_int(r[2]),
                     "percentual": fix_percentual(r[3])
                 })
             elif len(r) >= 2:
@@ -213,7 +382,7 @@ def parse_block(title, header, rows):
 
     if "tempo médio" in tl or "medio" in tl:
         return ("tempo_medio_pagamento", [
-            {"mes_ref": normalize_mesref(r[0]), "dias": json_safe(r[1])}
+            {"mes_ref": normalize_mesref(r[0]), "dias": fix_int(r[1])}
             for r in rows
         ])
 
@@ -227,8 +396,8 @@ def parse_block(title, header, rows):
         return ("parcelamentos_detalhe", [
             {
                 "mes_ref": normalize_mesref(r[0]),
-                "qtde_parcelas": json_safe(r[1]),
-                "qtde": json_safe(r[2]),
+                "qtde_parcelas": fix_int(r[1]),
+                "qtde": fix_int(r[2]),
                 "percentual": fix_percentual(r[3])
             }
             for r in rows

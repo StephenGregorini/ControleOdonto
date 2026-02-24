@@ -1,0 +1,1136 @@
+{
+    "estabelecimento": {
+        "cnpj": "CNPJ",
+        "external_id": "ExternalId"
+    },
+    "boletos_emitidos": [
+        {
+            "mes_ref": "2025-01",
+            "qtde": 212,
+            "valor_total": "78000.00"
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde": 384,
+            "valor_total": "184200.00"
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde": 213,
+            "valor_total": "86675.00"
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde": 191,
+            "valor_total": "94661.94"
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde": 300,
+            "valor_total": "112052.50"
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde": 157,
+            "valor_total": "67026.39"
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde": 219,
+            "valor_total": "64520.95"
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde": 191,
+            "valor_total": "79045.14"
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde": 238,
+            "valor_total": "98141.00"
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde": 278,
+            "valor_total": "142019.51"
+        },
+        {
+            "mes_ref": "2025-11",
+            "qtde": 71,
+            "valor_total": "43380.00"
+        }
+    ],
+    "taxa_pago_no_vencimento": [
+        {
+            "mes_ref": "2025-01",
+            "taxa": 0.797687861271
+        },
+        {
+            "mes_ref": "2025-02",
+            "taxa": 0.724381625441
+        },
+        {
+            "mes_ref": "2025-03",
+            "taxa": 0.767605633802
+        },
+        {
+            "mes_ref": "2025-04",
+            "taxa": 0.84693877551
+        },
+        {
+            "mes_ref": "2025-05",
+            "taxa": 0.9
+        },
+        {
+            "mes_ref": "2025-06",
+            "taxa": 0.848101265822
+        },
+        {
+            "mes_ref": "2025-07",
+            "taxa": 0.865384615384
+        },
+        {
+            "mes_ref": "2025-08",
+            "taxa": 0.963855421686
+        },
+        {
+            "mes_ref": "2025-09",
+            "taxa": 0.957746478873
+        },
+        {
+            "mes_ref": "2025-10",
+            "taxa": 1.0
+        },
+        {
+            "mes_ref": "2025-11",
+            "taxa": 1.0
+        }
+    ],
+    "taxa_atraso_mensal": [],
+    "taxa_atraso_faixa": [
+        {
+            "mes_ref": "2025-01",
+            "faixa": "16-30",
+            "qtde": 4,
+            "percentual": 0.114285714285
+        },
+        {
+            "mes_ref": "2025-01",
+            "faixa": ">30",
+            "qtde": 3,
+            "percentual": 0.085714285714
+        },
+        {
+            "mes_ref": "2025-02",
+            "faixa": "0-7",
+            "qtde": 59,
+            "percentual": 0.75641025641
+        },
+        {
+            "mes_ref": "2025-02",
+            "faixa": "8-15",
+            "qtde": 9,
+            "percentual": 0.115384615384
+        },
+        {
+            "mes_ref": "2025-02",
+            "faixa": "16-30",
+            "qtde": 8,
+            "percentual": 0.102564102564
+        },
+        {
+            "mes_ref": "2025-02",
+            "faixa": ">30",
+            "qtde": 2,
+            "percentual": 0.025641025641
+        },
+        {
+            "mes_ref": "2025-03",
+            "faixa": "0-7",
+            "qtde": 23,
+            "percentual": 0.696969696969
+        },
+        {
+            "mes_ref": "2025-03",
+            "faixa": "8-15",
+            "qtde": 7,
+            "percentual": 0.212121212121
+        },
+        {
+            "mes_ref": "2025-03",
+            "faixa": "16-30",
+            "qtde": 2,
+            "percentual": 0.060606060606
+        },
+        {
+            "mes_ref": "2025-03",
+            "faixa": ">30",
+            "qtde": 1,
+            "percentual": 0.030303030303
+        },
+        {
+            "mes_ref": "2025-04",
+            "faixa": "0-7",
+            "qtde": 14,
+            "percentual": 0.933333333333
+        },
+        {
+            "mes_ref": "2025-04",
+            "faixa": "8-15",
+            "qtde": 1,
+            "percentual": 0.066666666666
+        },
+        {
+            "mes_ref": "2025-05",
+            "faixa": "0-7",
+            "qtde": 12,
+            "percentual": 0.857142857142
+        },
+        {
+            "mes_ref": "2025-05",
+            "faixa": "16-30",
+            "qtde": 2,
+            "percentual": 0.142857142857
+        },
+        {
+            "mes_ref": "2025-06",
+            "faixa": "0-7",
+            "qtde": 10,
+            "percentual": 0.833333333333
+        },
+        {
+            "mes_ref": "2025-06",
+            "faixa": "8-15",
+            "qtde": 2,
+            "percentual": 0.166666666666
+        },
+        {
+            "mes_ref": "2025-07",
+            "faixa": "0-7",
+            "qtde": 14,
+            "percentual": 1.0
+        },
+        {
+            "mes_ref": "2025-08",
+            "faixa": "0-7",
+            "qtde": 1,
+            "percentual": 0.333333333333
+        },
+        {
+            "mes_ref": "2025-08",
+            "faixa": "16-30",
+            "qtde": 2,
+            "percentual": 0.666666666666
+        },
+        {
+            "mes_ref": "2025-09",
+            "faixa": "0-7",
+            "qtde": 3,
+            "percentual": 1.0
+        }
+    ],
+    "inadimplencia": [
+        {
+            "mes_ref": "2025-01",
+            "taxa": 0.18396226415
+        },
+        {
+            "mes_ref": "2025-02",
+            "taxa": 0.263020833333
+        },
+        {
+            "mes_ref": "2025-03",
+            "taxa": 0.333333333333
+        },
+        {
+            "mes_ref": "2025-04",
+            "taxa": 0.486910994764
+        },
+        {
+            "mes_ref": "2025-05",
+            "taxa": 0.533333333333
+        },
+        {
+            "mes_ref": "2025-06",
+            "taxa": 0.496815286624
+        },
+        {
+            "mes_ref": "2025-07",
+            "taxa": 0.525114155251
+        },
+        {
+            "mes_ref": "2025-08",
+            "taxa": 0.565445026178
+        },
+        {
+            "mes_ref": "2025-09",
+            "taxa": 0.701680672268
+        },
+        {
+            "mes_ref": "2025-10",
+            "taxa": 0.791366906474
+        },
+        {
+            "mes_ref": "2025-11",
+            "taxa": 0.845070422535
+        }
+    ],
+    "tempo_medio_pagamento": [
+        {
+            "mes_ref": "2025-01",
+            "dias": 8
+        },
+        {
+            "mes_ref": "2025-02",
+            "dias": 6
+        },
+        {
+            "mes_ref": "2025-03",
+            "dias": 6
+        },
+        {
+            "mes_ref": "2025-04",
+            "dias": 3
+        },
+        {
+            "mes_ref": "2025-05",
+            "dias": 4
+        },
+        {
+            "mes_ref": "2025-06",
+            "dias": 3
+        },
+        {
+            "mes_ref": "2025-07",
+            "dias": 1
+        },
+        {
+            "mes_ref": "2025-08",
+            "dias": 17
+        },
+        {
+            "mes_ref": "2025-09",
+            "dias": 1
+        },
+        {
+            "mes_ref": "2025-10",
+            "dias": null
+        },
+        {
+            "mes_ref": "2025-11",
+            "dias": null
+        }
+    ],
+    "valor_medio_boleto": [
+        {
+            "mes_ref": "2025-02",
+            "valor": 479687500
+        },
+        {
+            "mes_ref": "2025-03",
+            "valor": 406924882
+        },
+        {
+            "mes_ref": "2025-04",
+            "valor": 495612251
+        },
+        {
+            "mes_ref": "2025-05",
+            "valor": 373508333
+        },
+        {
+            "mes_ref": "2025-06",
+            "valor": 426919681
+        },
+        {
+            "mes_ref": "2025-07",
+            "valor": 294616210
+        },
+        {
+            "mes_ref": "2025-08",
+            "valor": 413848900
+        },
+        {
+            "mes_ref": "2025-09",
+            "valor": 412357142
+        },
+        {
+            "mes_ref": "2025-10",
+            "valor": 510861546
+        },
+        {
+            "mes_ref": "2025-11",
+            "valor": 610985915
+        }
+    ],
+    "parcelamentos": [
+        {
+            "mes_ref": "2025-01",
+            "qtde_parcelas": 1,
+            "qtde": 49,
+            "percentual": 0.231132075471
+        },
+        {
+            "mes_ref": "2025-01",
+            "qtde_parcelas": 2,
+            "qtde": 4,
+            "percentual": 0.018867924528
+        },
+        {
+            "mes_ref": "2025-01",
+            "qtde_parcelas": 4,
+            "qtde": 8,
+            "percentual": 0.037735849056
+        },
+        {
+            "mes_ref": "2025-01",
+            "qtde_parcelas": 5,
+            "qtde": 5,
+            "percentual": 0.02358490566
+        },
+        {
+            "mes_ref": "2025-01",
+            "qtde_parcelas": 6,
+            "qtde": 1,
+            "percentual": 0.004716981132
+        },
+        {
+            "mes_ref": "2025-01",
+            "qtde_parcelas": 7,
+            "qtde": 7,
+            "percentual": 0.033018867924
+        },
+        {
+            "mes_ref": "2025-01",
+            "qtde_parcelas": 10,
+            "qtde": 50,
+            "percentual": 0.235849056603
+        },
+        {
+            "mes_ref": "2025-01",
+            "qtde_parcelas": 11,
+            "qtde": 38,
+            "percentual": 0.179245283018
+        },
+        {
+            "mes_ref": "2025-01",
+            "qtde_parcelas": 25,
+            "qtde": 50,
+            "percentual": 0.235849056603
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 1,
+            "qtde": 38,
+            "percentual": 0.098958333333
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 2,
+            "qtde": 4,
+            "percentual": 0.010416666666
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 5,
+            "qtde": 17,
+            "percentual": 0.044270833333
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 6,
+            "qtde": 12,
+            "percentual": 0.03125
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 7,
+            "qtde": 13,
+            "percentual": 0.033854166666
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 8,
+            "qtde": 8,
+            "percentual": 0.020833333333
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 9,
+            "qtde": 9,
+            "percentual": 0.0234375
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 10,
+            "qtde": 67,
+            "percentual": 0.174479166666
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 11,
+            "qtde": 74,
+            "percentual": 0.192708333333
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 12,
+            "qtde": 24,
+            "percentual": 0.0625
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 15,
+            "qtde": 45,
+            "percentual": 0.1171875
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 24,
+            "qtde": 48,
+            "percentual": 0.125
+        },
+        {
+            "mes_ref": "2025-02",
+            "qtde_parcelas": 25,
+            "qtde": 25,
+            "percentual": 0.065104166666
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 1,
+            "qtde": 18,
+            "percentual": 0.084507042253
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 2,
+            "qtde": 6,
+            "percentual": 0.028169014084
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 3,
+            "qtde": 6,
+            "percentual": 0.028169014084
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 4,
+            "qtde": 1,
+            "percentual": 0.00469483568
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 5,
+            "qtde": 5,
+            "percentual": 0.023474178403
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 9,
+            "qtde": 27,
+            "percentual": 0.12676056338
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 10,
+            "qtde": 57,
+            "percentual": 0.267605633802
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 15,
+            "qtde": 15,
+            "percentual": 0.070422535211
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 24,
+            "qtde": 72,
+            "percentual": 0.338028169014
+        },
+        {
+            "mes_ref": "2025-03",
+            "qtde_parcelas": 25,
+            "qtde": 6,
+            "percentual": 0.028169014084
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 1,
+            "qtde": 21,
+            "percentual": 0.13125
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 3,
+            "qtde": 3,
+            "percentual": 0.01875
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 4,
+            "qtde": 8,
+            "percentual": 0.05
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 6,
+            "qtde": 6,
+            "percentual": 0.0375
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 7,
+            "qtde": 3,
+            "percentual": 0.01875
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 9,
+            "qtde": 8,
+            "percentual": 0.05
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 10,
+            "qtde": 10,
+            "percentual": 0.0625
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 11,
+            "qtde": 3,
+            "percentual": 0.01875
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 12,
+            "qtde": 12,
+            "percentual": 0.075
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 15,
+            "qtde": 15,
+            "percentual": 0.09375
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 17,
+            "qtde": 17,
+            "percentual": 0.10625
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 26,
+            "qtde": 26,
+            "percentual": 0.1625
+        },
+        {
+            "mes_ref": "2025-04",
+            "qtde_parcelas": 28,
+            "qtde": 28,
+            "percentual": 0.175
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 1,
+            "qtde": 23,
+            "percentual": 0.08679245283
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 2,
+            "qtde": 4,
+            "percentual": 0.015094339622
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 3,
+            "qtde": 3,
+            "percentual": 0.011320754716
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 5,
+            "qtde": 6,
+            "percentual": 0.022641509433
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 6,
+            "qtde": 6,
+            "percentual": 0.022641509433
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 7,
+            "qtde": 1,
+            "percentual": 0.003773584905
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 8,
+            "qtde": 29,
+            "percentual": 0.109433962264
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 10,
+            "qtde": 10,
+            "percentual": 0.037735849056
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 11,
+            "qtde": 44,
+            "percentual": 0.166037735849
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 12,
+            "qtde": 12,
+            "percentual": 0.045283018867
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 13,
+            "qtde": 39,
+            "percentual": 0.14716981132
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 15,
+            "qtde": 15,
+            "percentual": 0.056603773584
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 24,
+            "qtde": 48,
+            "percentual": 0.181132075471
+        },
+        {
+            "mes_ref": "2025-05",
+            "qtde_parcelas": 25,
+            "qtde": 25,
+            "percentual": 0.094339622641
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 1,
+            "qtde": 21,
+            "percentual": 0.133757961783
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 2,
+            "qtde": 3,
+            "percentual": 0.019108280254
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 4,
+            "qtde": 4,
+            "percentual": 0.025477707006
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 6,
+            "qtde": 6,
+            "percentual": 0.038216560509
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 7,
+            "qtde": 19,
+            "percentual": 0.12101910828
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 8,
+            "qtde": 8,
+            "percentual": 0.050955414012
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 9,
+            "qtde": 9,
+            "percentual": 0.057324840764
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 11,
+            "qtde": 12,
+            "percentual": 0.076433121019
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 14,
+            "qtde": 14,
+            "percentual": 0.089171974522
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 16,
+            "qtde": 16,
+            "percentual": 0.101910828025
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 21,
+            "qtde": 21,
+            "percentual": 0.133757961783
+        },
+        {
+            "mes_ref": "2025-06",
+            "qtde_parcelas": 24,
+            "qtde": 24,
+            "percentual": 0.152866242038
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 1,
+            "qtde": 21,
+            "percentual": 0.115384615384
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 2,
+            "qtde": 4,
+            "percentual": 0.021978021978
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 3,
+            "qtde": 3,
+            "percentual": 0.016483516483
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 4,
+            "qtde": 1,
+            "percentual": 0.005494505494
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 5,
+            "qtde": 15,
+            "percentual": 0.082417582417
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 6,
+            "qtde": 15,
+            "percentual": 0.082417582417
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 7,
+            "qtde": 7,
+            "percentual": 0.038461538461
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 8,
+            "qtde": 8,
+            "percentual": 0.043956043956
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 10,
+            "qtde": 40,
+            "percentual": 0.21978021978
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 11,
+            "qtde": 11,
+            "percentual": 0.060439560439
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 14,
+            "qtde": 14,
+            "percentual": 0.076923076923
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 15,
+            "qtde": 1,
+            "percentual": 0.005494505494
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 20,
+            "qtde": 20,
+            "percentual": 0.10989010989
+        },
+        {
+            "mes_ref": "2025-07",
+            "qtde_parcelas": 22,
+            "qtde": 22,
+            "percentual": 0.120879120879
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 1,
+            "qtde": 23,
+            "percentual": 0.120418848167
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 2,
+            "qtde": 2,
+            "percentual": 0.010471204188
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 3,
+            "qtde": 3,
+            "percentual": 0.015706806282
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 4,
+            "qtde": 8,
+            "percentual": 0.041884816753
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 5,
+            "qtde": 30,
+            "percentual": 0.157068062827
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 10,
+            "qtde": 10,
+            "percentual": 0.052356020942
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 11,
+            "qtde": 11,
+            "percentual": 0.057591623036
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 13,
+            "qtde": 13,
+            "percentual": 0.068062827225
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 15,
+            "qtde": 45,
+            "percentual": 0.23560209424
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 22,
+            "qtde": 22,
+            "percentual": 0.115183246073
+        },
+        {
+            "mes_ref": "2025-08",
+            "qtde_parcelas": 24,
+            "qtde": 24,
+            "percentual": 0.125654450261
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 1,
+            "qtde": 31,
+            "percentual": 0.13025210084
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 2,
+            "qtde": 2,
+            "percentual": 0.008403361344
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 3,
+            "qtde": 3,
+            "percentual": 0.012605042016
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 5,
+            "qtde": 10,
+            "percentual": 0.042016806722
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 10,
+            "qtde": 20,
+            "percentual": 0.084033613445
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 12,
+            "qtde": 12,
+            "percentual": 0.050420168067
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 15,
+            "qtde": 30,
+            "percentual": 0.126050420168
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 16,
+            "qtde": 16,
+            "percentual": 0.067226890756
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 18,
+            "qtde": 36,
+            "percentual": 0.151260504201
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 19,
+            "qtde": 38,
+            "percentual": 0.159663865546
+        },
+        {
+            "mes_ref": "2025-09",
+            "qtde_parcelas": 20,
+            "qtde": 40,
+            "percentual": 0.16806722689
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 1,
+            "qtde": 29,
+            "percentual": 0.117408906882
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 2,
+            "qtde": 6,
+            "percentual": 0.024291497975
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 3,
+            "qtde": 3,
+            "percentual": 0.012145748987
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 5,
+            "qtde": 5,
+            "percentual": 0.020242914979
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 8,
+            "qtde": 2,
+            "percentual": 0.008097165991
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 10,
+            "qtde": 20,
+            "percentual": 0.080971659919
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 11,
+            "qtde": 22,
+            "percentual": 0.08906882591
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 12,
+            "qtde": 36,
+            "percentual": 0.145748987854
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 13,
+            "qtde": 13,
+            "percentual": 0.052631578947
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 15,
+            "qtde": 15,
+            "percentual": 0.060728744939
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 16,
+            "qtde": 16,
+            "percentual": 0.064777327935
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 17,
+            "qtde": 17,
+            "percentual": 0.068825910931
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 18,
+            "qtde": 18,
+            "percentual": 0.072874493927
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 20,
+            "qtde": 20,
+            "percentual": 0.080971659919
+        },
+        {
+            "mes_ref": "2025-10",
+            "qtde_parcelas": 25,
+            "qtde": 25,
+            "percentual": 0.101214574898
+        },
+        {
+            "mes_ref": "2025-11",
+            "qtde_parcelas": 1,
+            "qtde": 9,
+            "percentual": 0.12676056338
+        },
+        {
+            "mes_ref": "2025-11",
+            "qtde_parcelas": 4,
+            "qtde": 8,
+            "percentual": 0.112676056338
+        },
+        {
+            "mes_ref": "2025-11",
+            "qtde_parcelas": 8,
+            "qtde": 8,
+            "percentual": 0.112676056338
+        },
+        {
+            "mes_ref": "2025-11",
+            "qtde_parcelas": 10,
+            "qtde": 10,
+            "percentual": 0.140845070422
+        },
+        {
+            "mes_ref": "2025-11",
+            "qtde_parcelas": 12,
+            "qtde": 12,
+            "percentual": 0.169014084507
+        },
+        {
+            "mes_ref": "2025-11",
+            "qtde_parcelas": 24,
+            "qtde": 24,
+            "percentual": 0.338028169014
+        }
+    ]
+}

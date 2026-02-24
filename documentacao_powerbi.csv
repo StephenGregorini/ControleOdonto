@@ -1,0 +1,103 @@
+﻿tipo;tabela;nome;display_folder;detalhe1;detalhe2;descricao
+MEDIDA;_medidas;Qtde Boletos;01 - Indicadores Gerais;SUM(f_indicadores_cobranca[QtdeBoletosEmitidos]);;
+MEDIDA;_medidas;Valor Total Emitido;01 - Indicadores Gerais;SUM(f_indicadores_cobranca[ValorTotalEmitido]);;
+MEDIDA;_medidas;Valor Médio Boleto (base);01 - Indicadores Gerais; DIVIDE( [Valor Total Emitido], [Qtde Boletos] );;
+MEDIDA;_medidas;Taxa Pago no Vencimento (pond);02 - Pagamento e Atraso; DIVIDE(     SUMX(f_indicadores_cobranca, f_indicadores_cobranca[TaxaPagoNoVencimento] * f_indicadores_cobranca[QtdeBoletosEmitidos]),     [Qtde Boletos] );;
+MEDIDA;_medidas;Média Dias Após Vencimento (pond);02 - Pagamento e Atraso; DIVIDE(     SUMX(f_indicadores_cobranca, f_indicadores_cobranca[MediaDiasAposVencimento] * f_indicadores_cobranca[QtdeBoletosEmitidos]),     [Qtde Boletos] );;
+MEDIDA;_medidas;Qtde Registros Parcelas;03 - Parcelamentos;SUM(f_parcelamentos[Qtde]);;
+MEDIDA;_medidas;Média Parcelas (pond);03 - Parcelamentos; DIVIDE(     SUMX(f_parcelamentos, f_parcelamentos[QtdeParcelas] * f_parcelamentos[Qtde]),     [Qtde Registros Parcelas] );;
+MEDIDA;_medidas;Max Parcelas (global);03 - Parcelamentos; MAXX( ALL(f_parcelamentos[QtdeParcelas]), f_parcelamentos[QtdeParcelas] );;
+MEDIDA;_medidas;Dias Atraso (derivado por faixas);02 - Pagamento e Atraso; VAR MesesSel =     VALUES ( d_calendario[Date] ) VAR AtrasoFiltrado =     CALCULATETABLE (         f_atraso_boletos,         TREATAS ( MesesSel, f_atraso_boletos[MesRef] )     ) VAR AtrasoComMid =     ADDCOLUMNS (         AtrasoFiltrado,         "MidDias",             LOOKUPVALUE (                 d_faixa_atraso[MidDias],                 d_faixa_atraso[FaixaAtraso], f_atraso_boletos[FaixaAtraso]             )     ) RETURN DIVIDE (     SUMX ( AtrasoComMid, [MidDias] * f_atraso_boletos[Qtde] ),     SUMX ( AtrasoComMid, f_atraso_boletos[Qtde] ) );;
+MEDIDA;_medidas;Valor Médio Boleto (global max);01 - Indicadores Gerais; MAXX( ALL(f_indicadores_cobranca[ValorMedioBoleto]), f_indicadores_cobranca[ValorMedioBoleto] );;
+MEDIDA;_medidas;Norm Pago no Vencimento;05 - Normalizações; VAR v = [Taxa Pago no Vencimento (pond)]  -- 0–1 RETURN MAX(0, MIN(1, v));;
+MEDIDA;_medidas;Norm Dias Atraso;05 - Normalizações; VAR dias = COALESCE([Média Dias Após Vencimento (pond)], [Dias Atraso (derivado por faixas)]) RETURN MAX(0, MIN(1, 1 - DIVIDE(dias, 30)));;
+MEDIDA;_medidas;Norm Parcelas;03 - Parcelamentos; VAR mediaParc = [Média Parcelas (pond)] VAR maxParc   = [Max Parcelas (global)] RETURN MAX(0, MIN(1, 1 - DIVIDE(mediaParc, maxParc)));;
+MEDIDA;_medidas;Norm Valor Médio;05 - Normalizações; VAR v = [Valor Médio Boleto (base)] VAR m = [Valor Médio Boleto (global max)] RETURN MAX(0, MIN(1, DIVIDE(v, m)));;
+MEDIDA;_medidas;Score Crédito;04 - Score e Risco; VAR wInad  = 0.40 VAR wVenc  = 0.25 VAR wDias  = 0.15 VAR wParc  = 0.10 VAR wValor = 0.10 RETURN 100 * (     wInad * [Norm Inadimplência] +     wVenc * [Norm Pago no Vencimento] +     wDias * [Norm Dias Atraso] +     wParc * [Norm Parcelas] +     wValor * [Norm Valor Médio] ) ;;
+MEDIDA;_medidas;Valor Emitido (3M média);01 - Indicadores Gerais; AVERAGEX(     DATESINPERIOD(d_calendario[Date], MAX(d_calendario[Date]), -3, MONTH),     [Valor Total Emitido] );;
+MEDIDA;_medidas;Score (mês anterior);04 - Score e Risco; CALCULATE([Score Crédito], DATEADD(d_calendario[Date], -1, MONTH));;
+MEDIDA;_medidas;Score Variação vs M-1;04 - Score e Risco;[Score Crédito] - [Score (mês anterior)];;
+MEDIDA;_medidas;Categoria Risco;04 - Score e Risco; SWITCH(     TRUE(),     [Score Crédito] >= 85, "A (Excelente)",     [Score Crédito] >= 70, "B (Bom)",     [Score Crédito] >= 50, "C (Moderado)",     [Score Crédito] >= 30, "D (Ruim)",     "E (Crítico)" );;
+MEDIDA;_medidas;Categoria Risco (ordem);04 - Score e Risco; SWITCH(     [Categoria Risco],     "A (Excelente)", 1,     "B (Bom)", 2,     "C (Moderado)", 3,     "D (Ruim)", 4,     5 );;
+MEDIDA;_medidas;Limite Sugerido;04 - Score e Risco; VAR media3M = [Valor Emitido (3M média)] VAR s = [Score Crédito] RETURN SWITCH(     TRUE(),     s >= 85, media3M * 1.20,     s >= 70, media3M * 1.00,     s >= 50, media3M * 0.80,     s >= 30, media3M * 0.50,     0 ) ;;
+MEDIDA;_medidas;Qtde Atrasos (com calendário);02 - Pagamento e Atraso; CALCULATE(     SUM(f_atraso_boletos[Qtde]),     USERELATIONSHIP(d_calendario[Date], f_atraso_boletos[MesRef]) ) ;;
+MEDIDA;_medidas;Qtde Atrasos (com calendário e faixa);02 - Pagamento e Atraso; VAR MesesSel = VALUES( d_calendario[Date] ) VAR FaixasSel = VALUES( d_faixa_atraso[FaixaAtraso] ) VAR AtrasoFiltrado =     CALCULATETABLE(         f_atraso_boletos,         USERELATIONSHIP( d_calendario[Date], f_atraso_boletos[MesRef] ),         TREATAS( FaixasSel, f_atraso_boletos[FaixaAtraso] )     ) RETURN SUMX( AtrasoFiltrado, f_atraso_boletos[Qtde] ) ;;
+MEDIDA;_medidas;Variação Score;04 - Score e Risco; VAR ScoreAtual = [Score Crédito] VAR ScoreAnterior =     CALCULATE(         [Score Crédito],         DATEADD(d_calendario[Date], -1, MONTH)     ) RETURN ScoreAtual - ScoreAnterior ;;
+MEDIDA;_medidas;Qtde Não pagos no vencimento;02 - Pagamento e Atraso; [Qtde Boletos] * ( 1 - [Taxa Pago no Vencimento (pond)] );;
+MEDIDA;_medidas;Qtde Não pagos;02 - Pagamento e Atraso; MAX( 0, [Qtde Não pagos no vencimento] - [Qtde Atrasos (com calendário)] );;
+MEDIDA;_medidas;% Inadimplência (coorte qtd);02 - Pagamento e Atraso; VAR nao_venc = [Qtde Não pagos no vencimento]       -- atrasos + não pagos VAR nao_pago = [Qtde Não pagos] RETURN DIVIDE( nao_pago, nao_venc );;
+MEDIDA;_medidas;% Pago com Atraso (competência);02 - Pagamento e Atraso; DIVIDE(     [Qtde Atrasos (com calendário)],        -- já existe, usa USERELATIONSHIP com DimCalendario     [Qtde Boletos] );;
+MEDIDA;_medidas;% Inadimplência (competência);02 - Pagamento e Atraso; VAR pct_no_due = [Taxa Pago no Vencimento (pond)]      -- 0–1 VAR pct_atraso = [% Pago com Atraso (competência)] RETURN MAX( 0, 1 - pct_no_due - pct_atraso );;
+MEDIDA;_medidas;Norm Inadimplência;02 - Pagamento e Atraso; VAR v = [% Inadimplência (coorte qtd)]   -- 0–1 RETURN MAX(0, MIN(1, 1 - v)) ;;
+COLUNA;f_atraso_boletos;MesRef;;DateTime;false;
+COLUNA;f_atraso_boletos;FaixaAtraso;;String;false;
+COLUNA;f_atraso_boletos;Qtde;;Int64;false;
+COLUNA;f_atraso_boletos;Percentual;;Double;false;
+COLUNA;f_atraso_boletos;Nome;;String;false;
+COLUNA;DateTableTemplate_61d25e17-4197-4dc4-96b5-f0b17ee7116b;Date;;DateTime;false;
+COLUNA;DateTableTemplate_61d25e17-4197-4dc4-96b5-f0b17ee7116b;Ano;;Int64;true;
+COLUNA;DateTableTemplate_61d25e17-4197-4dc4-96b5-f0b17ee7116b;MonthNo;;Int64;true;
+COLUNA;DateTableTemplate_61d25e17-4197-4dc4-96b5-f0b17ee7116b;Mês;;String;true;
+COLUNA;DateTableTemplate_61d25e17-4197-4dc4-96b5-f0b17ee7116b;QuarterNo;;Int64;true;
+COLUNA;DateTableTemplate_61d25e17-4197-4dc4-96b5-f0b17ee7116b;Trimestre;;String;true;
+COLUNA;DateTableTemplate_61d25e17-4197-4dc4-96b5-f0b17ee7116b;Dia;;Int64;true;
+COLUNA;f_indicadores_cobranca;MesRef;;DateTime;false;
+COLUNA;f_indicadores_cobranca;QtdeBoletosEmitidos;;Int64;false;
+COLUNA;f_indicadores_cobranca;ValorTotalEmitido;;Double;false;
+COLUNA;f_indicadores_cobranca;TaxaPagoNoVencimento;;Double;false;
+COLUNA;f_indicadores_cobranca;TaxaInadimplencia;;Double;false;
+COLUNA;f_indicadores_cobranca;MediaDiasAposVencimento;;Int64;false;
+COLUNA;f_indicadores_cobranca;ValorMedioBoleto;;Double;false;
+COLUNA;f_indicadores_cobranca;Valor Inadimplente;;Double;true;
+COLUNA;f_indicadores_cobranca;Valor pago sem atraso;;Double;true;
+COLUNA;f_indicadores_cobranca;Nome;;String;false;
+COLUNA;f_parcelamentos;MesRef;;DateTime;false;
+COLUNA;f_parcelamentos;QtdeParcelas;;Int64;false;
+COLUNA;f_parcelamentos;Qtde;;Int64;false;
+COLUNA;f_parcelamentos;Nome;;String;false;
+COLUNA;_medidas;dummy;;Int64;false;
+COLUNA;d_calendario;Date;;DateTime;false;
+COLUNA;d_calendario;Ano;;Int64;false;
+COLUNA;d_calendario;Mes;;Int64;false;
+COLUNA;d_calendario;AnoMes;;Int64;false;
+COLUNA;d_calendario;InicioMes;;DateTime;false;
+COLUNA;d_calendario;FimMes;;DateTime;false;
+COLUNA;d_calendario;NomeMes;;String;false;
+COLUNA;d_calendario;NomeMesAno;;String;false;
+COLUNA;d_faixa_atraso;FaixaAtraso;;String;false;
+COLUNA;d_faixa_atraso;MinDias;;Int64;false;
+COLUNA;d_faixa_atraso;MaxDias;;Int64;false;
+COLUNA;d_faixa_atraso;MidDias;;Double;true;
+COLUNA;d_faixa_atraso;FaixaAtraso_ABC;;String;true;
+COLUNA;d_clinica;Clinica;;String;false;
+COLUNA;LocalDateTable_c49fa324-0d24-4c19-940a-520dffd50c7f;Date;;DateTime;false;
+COLUNA;LocalDateTable_c49fa324-0d24-4c19-940a-520dffd50c7f;Ano;;Int64;true;
+COLUNA;LocalDateTable_c49fa324-0d24-4c19-940a-520dffd50c7f;MonthNo;;Int64;true;
+COLUNA;LocalDateTable_c49fa324-0d24-4c19-940a-520dffd50c7f;Mês;;String;true;
+COLUNA;LocalDateTable_c49fa324-0d24-4c19-940a-520dffd50c7f;QuarterNo;;Int64;true;
+COLUNA;LocalDateTable_c49fa324-0d24-4c19-940a-520dffd50c7f;Trimestre;;String;true;
+COLUNA;LocalDateTable_c49fa324-0d24-4c19-940a-520dffd50c7f;Dia;;Int64;true;
+COLUNA;LocalDateTable_477fc772-9d05-423a-a74f-4f72111e69f4;Date;;DateTime;false;
+COLUNA;LocalDateTable_477fc772-9d05-423a-a74f-4f72111e69f4;Ano;;Int64;true;
+COLUNA;LocalDateTable_477fc772-9d05-423a-a74f-4f72111e69f4;MonthNo;;Int64;true;
+COLUNA;LocalDateTable_477fc772-9d05-423a-a74f-4f72111e69f4;Mês;;String;true;
+COLUNA;LocalDateTable_477fc772-9d05-423a-a74f-4f72111e69f4;QuarterNo;;Int64;true;
+COLUNA;LocalDateTable_477fc772-9d05-423a-a74f-4f72111e69f4;Trimestre;;String;true;
+COLUNA;LocalDateTable_477fc772-9d05-423a-a74f-4f72111e69f4;Dia;;Int64;true;
+COLUNA;LocalDateTable_5f1826c2-44f3-41c0-a1d0-6954f0728bc8;Date;;DateTime;false;
+COLUNA;LocalDateTable_5f1826c2-44f3-41c0-a1d0-6954f0728bc8;Ano;;Int64;true;
+COLUNA;LocalDateTable_5f1826c2-44f3-41c0-a1d0-6954f0728bc8;MonthNo;;Int64;true;
+COLUNA;LocalDateTable_5f1826c2-44f3-41c0-a1d0-6954f0728bc8;Mês;;String;true;
+COLUNA;LocalDateTable_5f1826c2-44f3-41c0-a1d0-6954f0728bc8;QuarterNo;;Int64;true;
+COLUNA;LocalDateTable_5f1826c2-44f3-41c0-a1d0-6954f0728bc8;Trimestre;;String;true;
+COLUNA;LocalDateTable_5f1826c2-44f3-41c0-a1d0-6954f0728bc8;Dia;;Int64;true;
+RELACIONAMENTO;f_indicadores_cobranca;Nome;;d_clinica;Clinica;OneDirection (true)
+RELACIONAMENTO;f_atraso_boletos;Nome;;d_clinica;Clinica;OneDirection (true)
+RELACIONAMENTO;f_parcelamentos;Nome;;d_clinica;Clinica;OneDirection (true)
+RELACIONAMENTO;d_calendario;Date;;LocalDateTable_c49fa324-0d24-4c19-940a-520dffd50c7f;Date;OneDirection (true)
+RELACIONAMENTO;f_indicadores_cobranca;MesRef;;d_calendario;Date;OneDirection (true)
+RELACIONAMENTO;f_atraso_boletos;MesRef;;d_calendario;Date;OneDirection (false)
+RELACIONAMENTO;f_parcelamentos;MesRef;;d_calendario;Date;OneDirection (false)
+RELACIONAMENTO;d_calendario;InicioMes;;LocalDateTable_477fc772-9d05-423a-a74f-4f72111e69f4;Date;OneDirection (true)
+RELACIONAMENTO;d_calendario;FimMes;;LocalDateTable_5f1826c2-44f3-41c0-a1d0-6954f0728bc8;Date;OneDirection (true)
+RELACIONAMENTO;f_atraso_boletos;FaixaAtraso;;d_faixa_atraso;FaixaAtraso;OneDirection (true)
